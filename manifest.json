@@ -1,0 +1,24 @@
+{
+  "id": "wishlist",
+  "name": "Wish List",
+  "version": "1.0.0",
+  "description": "Personal gift wishlists for every family member. Add items with priorities and links; family can browse each other's lists.",
+  "entrypoint": "index.html",
+  "runtime": "static",
+  "icon": "🎁",
+  "category": "family",
+  "tags": ["wishlist", "gifts", "holidays", "birthdays"],
+  "storage": "db",
+  "data_access": {
+    "reads": ["family.members"],
+    "writes": []
+  },
+  "permissions": {
+    "default_audience": "everyone",
+    "requires_approval": false
+  },
+  "nav": { "label": "Wish List" },
+  "resource_limits": {
+    "max_db_bytes": 10485760
+  }
+}

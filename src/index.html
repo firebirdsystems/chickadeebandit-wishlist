@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <base href="/run/wishlist/" />
+  <title>Wish List</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           var(--hub-bg, #f9fafb);
+      --card:         var(--hub-surface, #ffffff);
+      --border:       var(--hub-border, #e5e7eb);
+      --border-mid:   var(--hub-border, #d1d5db);
+      --text:         var(--hub-text, #111827);
+      --muted:        var(--hub-text-muted, #6b7280);
+      --accent:       var(--hub-primary, #111827);
+      --accent-hover: var(--hub-primary-hover, #374151);
+      --accent-fg:    var(--hub-primary-fg, #ffffff);
+      --accent-light: #f3f4f6;
+      --red:          #dc2626;
+      --red-light:    #fee2e2;
+      --radius:       var(--hub-radius, 0.5rem);
+      --shadow:       0 1px 3px rgba(0,0,0,.07);
+      --shadow-md:    0 4px 12px rgba(0,0,0,.10);
+    }
+
+    body {
+      font-family: var(--hub-font, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      font-size: var(--hub-font-size, 15px);
+      line-height: 1.5;
+    }
+
+    .app { max-width: 600px; margin: 0 auto; padding: 16px 16px 60px; }
+
+    /* ── Header ─────────────────────────────── */
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      gap: 10px;
+    }
+    .page-header h1 { font-size: 1.25rem; font-weight: 700; }
+    .who { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+
+    /* ── Tabs ───────────────────────────────── */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      background: var(--border);
+      border-radius: 10px;
+      padding: 3px;
+      margin-bottom: 16px;
+    }
+    .tab {
+      flex: 1;
+      padding: 7px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--muted);
+      background: transparent;
+      transition: all .15s;
+    }
+    .tab.active { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+
+    /* ── Buttons ────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: opacity .15s, background .15s;
+      text-decoration: none;
+    }
+    .btn:disabled { opacity: .45; cursor: default; }
+    .btn-primary { background: var(--accent); color: var(--accent-fg); }
+    .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+    .btn-ghost { background: transparent; color: var(--muted); border: 1.5px solid var(--border-mid); }
+    .btn-ghost:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Visibility bar ─────────────────────── */
+    .visibility-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      padding: 10px 14px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      flex-wrap: wrap;
+      box-shadow: var(--shadow);
+    }
+    .visibility-label { font-size: 0.82rem; color: var(--muted); font-weight: 500; flex-shrink: 0; }
+    .vis-pills { display: flex; gap: 6px; }
+    .vis-pill {
+      padding: 4px 14px;
+      border-radius: 20px;
+      border: 1.5px solid var(--border-mid);
+      background: transparent;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--muted);
+      transition: all .15s;
+    }
+    .vis-pill:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
+    .vis-pill.active { border-color: var(--accent); background: var(--accent); color: var(--accent-fg); }
+
+    /* ── Member picker (Browse) ─────────────── */
+    .member-pills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .member-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px 6px 8px;
+      border-radius: 20px;
+      border: 1.5px solid var(--border-mid);
+      background: var(--card);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--muted);
+      transition: all .15s;
+      box-shadow: var(--shadow);
+    }
+    .member-pill:hover:not(.active) { border-color: var(--accent); color: var(--text); }
+    .member-pill.active { color: var(--text); box-shadow: var(--shadow-md); }
+
+    /* ── Avatars ────────────────────────────── */
+    .avatar-xs {
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.6rem;
+      font-weight: 800;
+      color: white;
+      flex-shrink: 0;
+    }
+    .avatar-sm {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 800;
+      color: white;
+      flex-shrink: 0;
+    }
+
+    /* ── Browse header ──────────────────────── */
+    .browse-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .browse-name { font-weight: 700; font-size: 1rem; flex: 1; }
+    .browse-count { font-size: 0.8rem; color: var(--muted); }
+
+    /* ── Item list ──────────────────────────── */
+    .items-list {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+    .item-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      transition: background .1s;
+    }
+    .item-row:last-child { border-bottom: none; }
+    .item-row:hover { background: #fafafa; }
+    .item-main { flex: 1; min-width: 0; }
+    .item-top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .item-name { font-weight: 500; font-size: 0.95rem; min-width: 0; }
+    .item-link {
+      font-size: 0.85rem;
+      text-decoration: none;
+      opacity: 0.55;
+      flex-shrink: 0;
+      transition: opacity .15s;
+    }
+    .item-link:hover { opacity: 1; }
+    .item-desc { font-size: 0.8rem; color: var(--muted); margin-top: 3px; }
+
+    .item-actions { display: flex; gap: 4px; flex-shrink: 0; }
+    .btn-icon-sm {
+      padding: 5px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      cursor: pointer;
+      font-size: 0.8rem;
+      transition: all .15s;
+      line-height: 1;
+    }
+    .btn-icon-sm:hover { border-color: var(--accent); }
+    .btn-icon-sm.danger:hover { border-color: var(--red); background: var(--red-light); }
+
+    /* ── Badges ─────────────────────────────── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 20px;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+
+    /* ── Modal ──────────────────────────────── */
+    .modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.45);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      z-index: 100;
+    }
+    @media (min-width: 520px) {
+      .modal-backdrop { align-items: center; padding: 20px; }
+    }
+    .modal {
+      background: var(--card);
+      border-radius: var(--radius) var(--radius) 0 0;
+      width: 100%;
+      max-width: 480px;
+      max-height: 92vh;
+      overflow-y: auto;
+      padding: 24px;
+    }
+    @media (min-width: 520px) { .modal { border-radius: var(--radius); } }
+    .modal h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 18px; }
+
+    /* ── Form ───────────────────────────────── */
+    .form-group { margin-bottom: 16px; }
+    .form-group label {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+      width: 100%;
+      border: 1.5px solid var(--border-mid);
+      border-radius: 8px;
+      padding: 9px 12px;
+      font-size: 0.92rem;
+      outline: none;
+      transition: border-color .15s;
+      font-family: inherit;
+      background: var(--card);
+      color: var(--text);
+    }
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-group select:focus { border-color: var(--accent); }
+    .form-group textarea { resize: vertical; min-height: 60px; }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .modal-actions .btn { flex: 1; justify-content: center; }
+
+    /* ── Empty / loading ────────────────────── */
+    .empty {
+      text-align: center;
+      padding: 40px 16px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .empty-icon { font-size: 2.5rem; margin-bottom: 10px; }
+    .loading { text-align: center; padding: 48px; color: var(--muted); }
+    .error-msg {
+      background: var(--red-light);
+      color: var(--red);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 0.85rem;
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <div id="root"><div class="loading">Loading…</div></div>
+</div>
+
+<script type="module">
+import { memberColor, initial, esc, hubConfirm } from "/hub-sdk.js";
+import { canSeeMember, priorityLabel, sortItems } from "./logic.js";
+
+const CONTEXT = window.__CONTEXT_URL ?? "";
+const DB      = window.__DB_URL      ?? "";
+const APP_ID  = window.__APP_ID      ?? "wishlist";
+const ME      = window.__CURRENT_MEMBER ?? null;
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let members      = [];
+let tab          = "mine";
+let myVisibility = "everyone";
+let myItems      = [];
+let allWishlists = {};  // { [memberId]: { visibility } }
+let browseTarget = null;
+let browseItems  = [];
+let editingItemId = null;
+
+// ─── DB helper ────────────────────────────────────────────────────────────────
+async function dbRun(sql, params = []) {
+  if (!DB) return { rows: [] };
+  try {
+    const res = await fetch(DB, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sql, params }),
+    });
+    return await res.json();
+  } catch { return { rows: [] }; }
+}
+
+// ─── Load ─────────────────────────────────────────────────────────────────────
+async function loadMembers() {
+  if (!CONTEXT) {
+    members = [
+      { id: "demo-1", name: "Alex",   role: "adult" },
+      { id: "demo-2", name: "Jordan", role: "adult" },
+      { id: "demo-3", name: "Casey",  role: "child" },
+      { id: "demo-4", name: "Riley",  role: "child" },
+    ];
+    return;
+  }
+  try {
+    const res = await fetch(`${CONTEXT}?keys=family.members`);
+    members = ((await res.json())["family.members"]) ?? [];
+  } catch { members = []; }
+}
+
+async function loadMyData() {
+  if (!DB) {
+    myVisibility = "everyone";
+    myItems = [
+      { id: "d1", member_id: "demo-1", name: "Cozy knit sweater",    description: "Neutral color, size M", url: "", priority: "medium", created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" },
+      { id: "d2", member_id: "demo-1", name: "Running shoes",          description: "Size 10, wide fit",    url: "https://example.com", priority: "high", created_at: "2025-01-02T00:00:00Z", updated_at: "2025-01-02T00:00:00Z" },
+      { id: "d3", member_id: "demo-1", name: "Atomic Habits — book",   description: "",                     url: "", priority: "low", created_at: "2025-01-03T00:00:00Z", updated_at: "2025-01-03T00:00:00Z" },
+    ];
+    allWishlists = {
+      "demo-1": { visibility: "everyone" },
+      "demo-2": { visibility: "adults_only" },
+      "demo-3": { visibility: "everyone" },
+    };
+    return;
+  }
+
+  const meId = ME?.id;
+  const [wlRes, itemRes] = await Promise.all([
+    dbRun("SELECT member_id, visibility FROM wishlists"),
+    meId
+      ? dbRun(
+          "SELECT id, member_id, name, description, url, priority, created_at FROM wish_items WHERE member_id = ? ORDER BY created_at DESC",
+          [meId]
+        )
+      : Promise.resolve({ rows: [] }),
+  ]);
+
+  allWishlists = {};
+  for (const row of (wlRes.rows ?? [])) {
+    allWishlists[row.member_id] = { visibility: row.visibility };
+  }
+  myVisibility = allWishlists[meId]?.visibility ?? "everyone";
+  myItems = itemRes.rows ?? [];
+}
+
+async function loadBrowseItems(memberId) {
+  if (!DB) {
+    if (memberId === "demo-2") {
+      browseItems = [{ id: "b1", name: "Italian cookbook", description: "Any popular one", url: "", priority: "medium", created_at: "2025-01-01T00:00:00Z" }];
+    } else if (memberId === "demo-3") {
+      browseItems = [
+        { id: "b2", name: "LEGO Space set",    description: "", url: "", priority: "high",   created_at: "2025-01-01T00:00:00Z" },
+        { id: "b3", name: "Colored pencils",   description: "Professional grade, 72 count", url: "", priority: "medium", created_at: "2025-01-02T00:00:00Z" },
+      ];
+    } else {
+      browseItems = [];
+    }
+    return;
+  }
+  const res = await dbRun(
+    "SELECT id, name, description, url, priority, created_at FROM wish_items WHERE member_id = ? ORDER BY created_at DESC",
+    [memberId]
+  );
+  browseItems = res.rows ?? [];
+}
+
+// ─── Actions ──────────────────────────────────────────────────────────────────
+async function setVisibility(v) {
+  myVisibility = v;
+  if (DB && ME) {
+    const now = new Date().toISOString();
+    await dbRun(
+      `INSERT INTO wishlists (household_id, member_id, visibility, updated_at)
+       VALUES (current_setting('app.household_id', true)::uuid, ?, ?, ?)
+       ON CONFLICT (household_id, member_id)
+       DO UPDATE SET visibility = EXCLUDED.visibility, updated_at = EXCLUDED.updated_at`,
+      [ME.id, v, now]
+    );
+    allWishlists[ME.id] = { visibility: v };
+  }
+  render();
+}
+
+async function saveItem(data) {
+  const now = new Date().toISOString();
+
+  if (editingItemId) {
+    if (DB && ME) {
+      await dbRun(
+        "UPDATE wish_items SET name = ?, description = ?, url = ?, priority = ?, updated_at = ? WHERE id = ? AND member_id = ?",
+        [data.name, data.description, data.url, data.priority, now, editingItemId, ME.id]
+      );
+    }
+    myItems = myItems.map(i =>
+      i.id === editingItemId ? { ...i, ...data, updated_at: now } : i
+    );
+  } else {
+    const id = crypto.randomUUID();
+    const ownerId = ME?.id ?? "demo-1";
+    const item = { id, member_id: ownerId, ...data, created_at: now, updated_at: now };
+
+    if (DB && ME) {
+      await Promise.all([
+        dbRun(
+          "INSERT INTO wish_items (household_id, id, member_id, name, description, url, priority, created_at, updated_at) VALUES (current_setting('app.household_id', true)::uuid, ?, ?, ?, ?, ?, ?, ?, ?)",
+          [id, ME.id, data.name, data.description, data.url, data.priority, now, now]
+        ),
+        dbRun(
+          `INSERT INTO wishlists (household_id, member_id, visibility, updated_at)
+           VALUES (current_setting('app.household_id', true)::uuid, ?, ?, ?)
+           ON CONFLICT (household_id, member_id) DO NOTHING`,
+          [ME.id, myVisibility, now]
+        ),
+      ]);
+    }
+
+    myItems = [item, ...myItems];
+    if (!allWishlists[ownerId]) {
+      allWishlists[ownerId] = { visibility: myVisibility };
+    }
+  }
+}
+
+// ─── Modal ────────────────────────────────────────────────────────────────────
+let modalEl = null;
+function openModal(html) {
+  closeModal();
+  modalEl = document.createElement("div");
+  modalEl.className = "modal-backdrop";
+  modalEl.innerHTML = `<div class="modal">${html}</div>`;
+  modalEl.addEventListener("click", e => { if (e.target === modalEl) closeModal(); });
+  document.body.appendChild(modalEl);
+}
+function closeModal() { modalEl?.remove(); modalEl = null; }
+window.closeModal = closeModal;
+
+function openItemModal(item = null) {
+  editingItemId = item?.id ?? null;
+  openModal(`
+    <h3>${item ? "Edit Item" : "Add to Wish List"}</h3>
+    <div class="form-group">
+      <label>Item name <span style="color:var(--red)">*</span></label>
+      <input type="text" id="f-name" placeholder="e.g. Cozy sweater" value="${item ? esc(item.name) : ""}" />
+    </div>
+    <div class="form-group">
+      <label>Notes <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+      <textarea id="f-desc" placeholder="Size, color, brand, store…" rows="2">${item ? esc(item.description ?? "") : ""}</textarea>
+    </div>
+    <div class="form-group">
+      <label>Link <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+      <input type="url" id="f-url" placeholder="https://…" value="${item ? esc(item.url ?? "") : ""}" />
+    </div>
+    <div class="form-group">
+      <label>Priority</label>
+      <select id="f-priority">
+        <option value="high"   ${item?.priority === "high"                   ? "selected" : ""}>High</option>
+        <option value="medium" ${!item || item.priority === "medium"         ? "selected" : ""}>Medium</option>
+        <option value="low"    ${item?.priority === "low"                    ? "selected" : ""}>Low</option>
+      </select>
+    </div>
+    <div id="f-error" class="error-msg" style="display:none"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost"   onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitItem()">${item ? "Save" : "Add to List"}</button>
+    </div>
+  `);
+  setTimeout(() => document.getElementById("f-name")?.focus(), 50);
+}
+
+window.openAddModal = () => openItemModal();
+window.editItem = function(id) {
+  const item = myItems.find(i => i.id === id);
+  if (item) openItemModal(item);
+};
+
+window.submitItem = async function() {
+  const name = document.getElementById("f-name").value.trim();
+  const errEl = document.getElementById("f-error");
+  if (!name) {
+    errEl.textContent = "Please enter an item name.";
+    errEl.style.display = "block";
+    document.getElementById("f-name").focus();
+    return;
+  }
+  errEl.style.display = "none";
+
+  const btn = modalEl?.querySelector(".btn-primary");
+  const originalLabel = editingItemId ? "Save" : "Add to List";
+  if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
+
+  try {
+    await saveItem({
+      name,
+      description: document.getElementById("f-desc").value.trim(),
+      url:         document.getElementById("f-url").value.trim(),
+      priority:    document.getElementById("f-priority").value,
+    });
+    closeModal();
+    render();
+  } catch {
+    if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
+    errEl.textContent = "Something went wrong. Please try again.";
+    errEl.style.display = "block";
+  }
+};
+
+window.deleteItem = async function(id) {
+  if (!await hubConfirm({ message: "Remove this item?", confirmLabel: "Remove", destructive: true })) return;
+  if (DB && ME) {
+    await dbRun("DELETE FROM wish_items WHERE id = ? AND member_id = ?", [id, ME.id]);
+  }
+  myItems = myItems.filter(i => i.id !== id);
+  render();
+};
+
+window.setVisibility = setVisibility;
+
+window.setTab = async function(t) {
+  tab = t;
+  if (t === "browse" && !browseTarget) {
+    const visible = visibleMembers();
+    if (visible.length > 0) {
+      browseTarget = visible[0].id;
+      browseItems = [];
+      render();
+      await loadBrowseItems(browseTarget);
+    }
+  }
+  render();
+};
+
+window.selectBrowseMember = async function(memberId) {
+  browseTarget = memberId;
+  browseItems = [];
+  render();
+  await loadBrowseItems(memberId);
+  render();
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function effectiveMe() {
+  return ME ?? (members.length > 0 ? members[0] : null);
+}
+
+function visibleMembers() {
+  const me = effectiveMe();
+  if (!me) return [];
+  return members.filter(m => canSeeMember(m.id, allWishlists, me, members));
+}
+
+function priorityBadgeHtml(p) {
+  const info = priorityLabel(p);
+  return `<span class="badge" style="background:${info.bg};color:${info.color}">${esc(info.label)}</span>`;
+}
+
+function mColor(id) { return memberColor(id, members); }
+
+function renderItemRow(item, isOwner) {
+  const hasUrl = item.url && item.url.startsWith("http");
+  return `
+    <div class="item-row">
+      <div class="item-main">
+        <div class="item-top">
+          ${priorityBadgeHtml(item.priority)}
+          <span class="item-name">${esc(item.name)}</span>
+          ${hasUrl ? `<a href="${esc(item.url)}" target="_blank" rel="noopener" class="item-link" title="Open link">🔗</a>` : ""}
+        </div>
+        ${item.description ? `<div class="item-desc">${esc(item.description)}</div>` : ""}
+      </div>
+      ${isOwner ? `
+        <div class="item-actions">
+          <button class="btn-icon-sm" onclick="editItem('${item.id}')" title="Edit">✏️</button>
+          <button class="btn-icon-sm danger" onclick="deleteItem('${item.id}')" title="Remove">🗑</button>
+        </div>
+      ` : ""}
+    </div>
+  `;
+}
+
+// ─── Render ───────────────────────────────────────────────────────────────────
+function renderMyList() {
+  const me = effectiveMe();
+  const sorted = sortItems(myItems);
+
+  return `
+    <div class="page-header">
+      <div>
+        <h1>🎁 Wish List</h1>
+        ${me ? `<div class="who">${esc(me.name)}</div>` : ""}
+      </div>
+      <button class="btn btn-primary" onclick="openAddModal()">+ Add Item</button>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="setTab('mine')">My List</button>
+      <button class="tab" onclick="setTab('browse')">Browse Family</button>
+    </div>
+
+    <div class="visibility-bar">
+      <span class="visibility-label">Who can see my list:</span>
+      <div class="vis-pills">
+        <button class="vis-pill ${myVisibility === "everyone"    ? "active" : ""}" onclick="setVisibility('everyone')">🌍 Everyone</button>
+        <button class="vis-pill ${myVisibility === "adults_only" ? "active" : ""}" onclick="setVisibility('adults_only')">🔒 Adults only</button>
+      </div>
+    </div>
+
+    ${sorted.length === 0
+      ? `<div class="empty">
+           <div class="empty-icon">🎁</div>
+           <p>Your wish list is empty.</p>
+           <p style="margin-top:6px;font-size:0.85rem">Add items to let your family know what you'd love!</p>
+         </div>`
+      : `<div class="items-list">${sorted.map(i => renderItemRow(i, true)).join("")}</div>`
+    }
+  `;
+}
+
+function renderBrowse() {
+  const me = effectiveMe();
+  const visible = visibleMembers();
+
+  return `
+    <div class="page-header">
+      <div>
+        <h1>🎁 Wish List</h1>
+        ${me ? `<div class="who">${esc(me.name)}</div>` : ""}
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab" onclick="setTab('mine')">My List</button>
+      <button class="tab active" onclick="setTab('browse')">Browse Family</button>
+    </div>
+
+    ${visible.length === 0
+      ? `<div class="empty">
+           <div class="empty-icon">👥</div>
+           <p>No family lists to browse yet.</p>
+           <p style="margin-top:6px;font-size:0.85rem">Family members will appear here once they add items to their list.</p>
+         </div>`
+      : `
+        <div class="member-pills">
+          ${visible.map(m => {
+            const color = mColor(m.id);
+            const isActive = browseTarget === m.id;
+            return `
+              <button class="member-pill ${isActive ? "active" : ""}"
+                onclick="selectBrowseMember('${m.id}')"
+                style="${isActive ? `border-color:${color};background:${color}18` : ""}">
+                <span class="avatar-xs" style="background:${color}">${initial(m.name)}</span>
+                ${esc(m.name)}
+              </button>
+            `;
+          }).join("")}
+        </div>
+
+        ${browseTarget ? renderBrowseList() : `<div class="empty"><p>Select a family member above to view their list.</p></div>`}
+      `
+    }
+  `;
+}
+
+function renderBrowseList() {
+  const member = members.find(m => m.id === browseTarget);
+  const sorted = sortItems(browseItems);
+  const color  = mColor(browseTarget);
+
+  return `
+    <div class="browse-header">
+      <span class="avatar-sm" style="background:${color}">${initial(member?.name ?? "?")}</span>
+      <span class="browse-name">${esc(member?.name ?? "")}'s Wish List</span>
+      <span class="browse-count">${sorted.length} item${sorted.length !== 1 ? "s" : ""}</span>
+    </div>
+
+    ${sorted.length === 0
+      ? `<div class="empty" style="padding:24px 0">
+           <div class="empty-icon" style="font-size:2rem">🎁</div>
+           <p>${esc(member?.name ?? "They")}'s list is empty.</p>
+         </div>`
+      : `<div class="items-list">${sorted.map(i => renderItemRow(i, false)).join("")}</div>`
+    }
+  `;
+}
+
+function render() {
+  document.getElementById("root").innerHTML = tab === "mine" ? renderMyList() : renderBrowse();
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+(async () => {
+  await Promise.all([loadMembers(), loadMyData()]);
+  render();
+
+  // Pre-load the first visible member's items in the background
+  const visible = visibleMembers();
+  if (visible.length > 0) {
+    browseTarget = visible[0].id;
+    loadBrowseItems(browseTarget).then(render).catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>
