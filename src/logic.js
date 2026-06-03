@@ -6,12 +6,13 @@ export { isAdult };
  * Children only see lists set to "everyone"; adults see all.
  * Own list is never shown in Browse.
  */
-export function canSeeMember(targetMemberId, wishlists, me) {
+export function canSeeMember(targetMemberId, wishlists, me, members) {
   if (targetMemberId === me.id) return false;
   const wl = wishlists[targetMemberId];
   if (!wl) return false;
   if (wl.visibility === "everyone") return true;
-  return isAdult(me);
+  const fullMe = members?.find(m => m.id === me.id) ?? me;
+  return isAdult(fullMe);
 }
 
 const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 };
@@ -24,7 +25,7 @@ export function sortItems(items) {
   return [...items].sort((a, b) => {
     const po = priorityOrder(a.priority) - priorityOrder(b.priority);
     if (po !== 0) return po;
-    return b.created_at < a.created_at ? 1 : b.created_at > a.created_at ? -1 : 0;
+    return a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0;
   });
 }
 
