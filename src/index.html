@@ -336,6 +336,7 @@ let myItems      = [];
 let allWishlists = {};  // { [memberId]: { visibility } }
 let browseTarget = null;
 let browseItems  = [];
+const browseCache = new Map();
 let editingItemId = null;
 
 // ─── DB helper ────────────────────────────────────────────────────────────────
@@ -427,6 +428,7 @@ async function loadBrowseItems(memberId) {
 // ─── Actions ──────────────────────────────────────────────────────────────────
 async function setVisibility(v) {
   myVisibility = v;
+  browseCache.clear();
   if (DB && ME) {
     const now = new Date().toISOString();
     await dbRun(
@@ -524,7 +526,7 @@ function openItemModal(item = null) {
       <button class="btn btn-primary" onclick="submitItem()">${item ? "Save" : "Add to List"}</button>
     </div>
   `);
-  setTimeout(() => document.getElementById("f-name")?.focus(), 50);
+  document.getElementById("f-name")?.focus();
 }
 
 window.openAddModal = () => openItemModal();
@@ -591,9 +593,15 @@ window.setTab = async function(t) {
 
 window.selectBrowseMember = async function(memberId) {
   browseTarget = memberId;
+  if (browseCache.has(memberId)) {
+    browseItems = browseCache.get(memberId);
+    render();
+    return;
+  }
   browseItems = [];
   render();
   await loadBrowseItems(memberId);
+  browseCache.set(memberId, browseItems);
   render();
 };
 
@@ -605,7 +613,7 @@ function effectiveMe() {
 function visibleMembers() {
   const me = effectiveMe();
   if (!me) return [];
-  return members.filter(m => canSeeMember(m.id, allWishlists, me, members));
+  return members.filter(m => canSeeMember(m.id, allWishlists, me));
 }
 
 function priorityBadgeHtml(p) {
