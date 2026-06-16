@@ -1,13 +1,11 @@
-CREATE TABLE IF NOT EXISTS wishlists (
-  household_id UUID NOT NULL DEFAULT current_setting('app.household_id', true)::uuid,
+CREATE TABLE IF NOT EXISTS app_wishlist__wishlists (
   member_id    TEXT NOT NULL,
   visibility   TEXT NOT NULL DEFAULT 'everyone',
   updated_at   TEXT NOT NULL,
-  PRIMARY KEY (household_id, member_id)
+  PRIMARY KEY (member_id)
 );
 
-CREATE TABLE IF NOT EXISTS wish_items (
-  household_id UUID NOT NULL DEFAULT current_setting('app.household_id', true)::uuid,
+CREATE TABLE IF NOT EXISTS app_wishlist__wish_items (
   id           TEXT NOT NULL,
   member_id    TEXT NOT NULL,
   name         TEXT NOT NULL,
@@ -16,7 +14,7 @@ CREATE TABLE IF NOT EXISTS wish_items (
   priority     TEXT NOT NULL DEFAULT 'medium',
   created_at   TEXT NOT NULL,
   updated_at   TEXT NOT NULL,
-  PRIMARY KEY (household_id, id)
+  PRIMARY KEY (id)
 );
 
-CREATE INDEX IF NOT EXISTS wish_items_member_idx ON wish_items (household_id, member_id);
+CREATE INDEX IF NOT EXISTS wish_items_member_idx ON app_wishlist__wish_items (member_id);

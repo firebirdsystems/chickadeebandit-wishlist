@@ -387,10 +387,10 @@ async function loadMyData() {
 
   const meId = ME?.id;
   const [wlRes, itemRes] = await Promise.all([
-    dbRun("SELECT member_id, visibility FROM wishlists"),
+    dbRun("SELECT member_id, visibility FROM app_wishlist__wishlists"),
     meId
       ? dbRun(
-          "SELECT id, member_id, name, description, url, priority, created_at FROM wish_items WHERE member_id = ? ORDER BY created_at DESC",
+          "SELECT id, member_id, name, description, url, priority, created_at FROM app_wishlist__wish_items WHERE member_id = ? ORDER BY created_at DESC",
           [meId]
         )
       : Promise.resolve({ rows: [] }),
@@ -419,7 +419,7 @@ async function loadBrowseItems(memberId) {
     return;
   }
   const res = await dbRun(
-    "SELECT id, name, description, url, priority, created_at FROM wish_items WHERE member_id = ? ORDER BY created_at DESC",
+    "SELECT id, name, description, url, priority, created_at FROM app_wishlist__wish_items WHERE member_id = ? ORDER BY created_at DESC",
     [memberId]
   );
   browseItems = res.rows ?? [];
@@ -432,9 +432,9 @@ async function setVisibility(v) {
   if (DB && ME) {
     const now = new Date().toISOString();
     await dbRun(
-      `INSERT INTO wishlists (household_id, member_id, visibility, updated_at)
-       VALUES (current_setting('app.household_id', true)::uuid, ?, ?, ?)
-       ON CONFLICT (household_id, member_id)
+      `INSERT INTO app_wishlist__wishlists (member_id, visibility, updated_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT (member_id)
        DO UPDATE SET visibility = EXCLUDED.visibility, updated_at = EXCLUDED.updated_at`,
       [ME.id, v, now]
     );
@@ -449,7 +449,7 @@ async function saveItem(data) {
   if (editingItemId) {
     if (DB && ME) {
       await dbRun(
-        "UPDATE wish_items SET name = ?, description = ?, url = ?, priority = ?, updated_at = ? WHERE id = ? AND member_id = ?",
+        "UPDATE app_wishlist__wish_items SET name = ?, description = ?, url = ?, priority = ?, updated_at = ? WHERE id = ? AND member_id = ?",
         [data.name, data.description, data.url, data.priority, now, editingItemId, ME.id]
       );
     }
@@ -464,13 +464,13 @@ async function saveItem(data) {
     if (DB && ME) {
       await Promise.all([
         dbRun(
-          "INSERT INTO wish_items (household_id, id, member_id, name, description, url, priority, created_at, updated_at) VALUES (current_setting('app.household_id', true)::uuid, ?, ?, ?, ?, ?, ?, ?, ?)",
+          "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
           [id, ME.id, data.name, data.description, data.url, data.priority, now, now]
         ),
         dbRun(
-          `INSERT INTO wishlists (household_id, member_id, visibility, updated_at)
-           VALUES (current_setting('app.household_id', true)::uuid, ?, ?, ?)
-           ON CONFLICT (household_id, member_id) DO NOTHING`,
+          `INSERT INTO app_wishlist__wishlists (member_id, visibility, updated_at)
+           VALUES (?, ?, ?)
+           ON CONFLICT (member_id) DO NOTHING`,
           [ME.id, myVisibility, now]
         ),
       ]);
@@ -569,7 +569,7 @@ window.submitItem = async function() {
 window.deleteItem = async function(id) {
   if (!await hubConfirm({ message: "Remove this item?", confirmLabel: "Remove", destructive: true })) return;
   if (DB && ME) {
-    await dbRun("DELETE FROM wish_items WHERE id = ? AND member_id = ?", [id, ME.id]);
+    await dbRun("DELETE FROM app_wishlist__wish_items WHERE id = ? AND member_id = ?", [id, ME.id]);
   }
   myItems = myItems.filter(i => i.id !== id);
   render();
