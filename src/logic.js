@@ -2,17 +2,23 @@ import { isAdult } from "./shared.js";
 export { isAdult };
 
 /**
- * Returns true if `me` is allowed to see `targetMemberId`'s list in Browse.
- * Children only see lists set to "everyone"; adults see all.
- * Own list is never shown in Browse.
+ * Returns true if `me` is allowed to see `targetMemberId` in Browse.
+ * Members only appear if they have a wishlist row and are not the viewer.
+ * Item-level visibility is enforced separately via canSeeItem.
  */
-export function canSeeMember(targetMemberId, wishlists, me, members) {
+export function canSeeMember(targetMemberId, wishlists, me) {
   if (targetMemberId === me.id) return false;
-  const wl = wishlists[targetMemberId];
-  if (!wl) return false;
-  if (wl.visibility === "everyone") return true;
-  const fullMe = members?.find(m => m.id === me.id) ?? me;
-  return isAdult(fullMe);
+  return targetMemberId in wishlists;
+}
+
+/**
+ * Returns true if `viewer` is allowed to see `item`.
+ * "everyone" → all members; "adults" → adults only; "private" → owner only (never shown in browse).
+ */
+export function canSeeItem(item, viewer) {
+  if (item.visibility === "private") return false;
+  if (item.visibility === "adults") return isAdult(viewer);
+  return true;
 }
 
 const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 };

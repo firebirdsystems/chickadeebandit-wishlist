@@ -321,7 +321,7 @@
 
 <script type="module">
 import { memberColor, initial, esc, hubConfirm } from "/hub-sdk.js";
-import { canSeeMember, priorityLabel, sortItems } from "./logic.js";
+import { canSeeMember, canSeeItem, priorityLabel, sortItems } from "./logic.js";
 
 const CONTEXT = window.__CONTEXT_URL ?? "";
 const DB      = window.__DB_URL      ?? "";
@@ -331,7 +331,6 @@ const ME      = window.__CURRENT_MEMBER ?? null;
 // ─── State ────────────────────────────────────────────────────────────────────
 let members      = [];
 let tab          = "mine";
-let myVisibility = "everyone";
 let myItems      = [];
 let allWishlists = {};  // { [memberId]: { visibility } }
 let browseTarget = null;
@@ -371,26 +370,25 @@ async function loadMembers() {
 
 async function loadMyData() {
   if (!DB) {
-    myVisibility = "everyone";
     myItems = [
-      { id: "d1", member_id: "demo-1", name: "Cozy knit sweater",    description: "Neutral color, size M", url: "", priority: "medium", created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" },
-      { id: "d2", member_id: "demo-1", name: "Running shoes",          description: "Size 10, wide fit",    url: "https://example.com", priority: "high", created_at: "2025-01-02T00:00:00Z", updated_at: "2025-01-02T00:00:00Z" },
-      { id: "d3", member_id: "demo-1", name: "Atomic Habits — book",   description: "",                     url: "", priority: "low", created_at: "2025-01-03T00:00:00Z", updated_at: "2025-01-03T00:00:00Z" },
+      { id: "d1", member_id: "demo-1", name: "Cozy knit sweater",    description: "Neutral color, size M", url: "", priority: "medium", visibility: "everyone",  created_at: "2025-01-01T00:00:00Z", updated_at: "2025-01-01T00:00:00Z" },
+      { id: "d2", member_id: "demo-1", name: "Running shoes",          description: "Size 10, wide fit",    url: "https://example.com", priority: "high", visibility: "adults", created_at: "2025-01-02T00:00:00Z", updated_at: "2025-01-02T00:00:00Z" },
+      { id: "d3", member_id: "demo-1", name: "Atomic Habits — book",   description: "",                     url: "", priority: "low",  visibility: "private", created_at: "2025-01-03T00:00:00Z", updated_at: "2025-01-03T00:00:00Z" },
     ];
     allWishlists = {
-      "demo-1": { visibility: "everyone" },
-      "demo-2": { visibility: "adults_only" },
-      "demo-3": { visibility: "everyone" },
+      "demo-1": {},
+      "demo-2": {},
+      "demo-3": {},
     };
     return;
   }
 
   const meId = ME?.id;
   const [wlRes, itemRes] = await Promise.all([
-    dbRun("SELECT member_id, visibility FROM app_wishlist__wishlists"),
+    dbRun("SELECT member_id FROM app_wishlist__wishlists"),
     meId
       ? dbRun(
-          "SELECT id, member_id, name, description, url, priority, created_at FROM app_wishlist__wish_items WHERE member_id = ? ORDER BY created_at DESC",
+          "SELECT id, member_id, name, description, url, priority, visibility, created_at FROM app_wishlist__wish_items WHERE member_id = ? ORDER BY created_at DESC",
           [meId]
         )
       : Promise.resolve({ rows: [] }),
@@ -398,20 +396,19 @@ async function loadMyData() {
 
   allWishlists = {};
   for (const row of (wlRes.rows ?? [])) {
-    allWishlists[row.member_id] = { visibility: row.visibility };
+    allWishlists[row.member_id] = {};
   }
-  myVisibility = allWishlists[meId]?.visibility ?? "everyone";
   myItems = itemRes.rows ?? [];
 }
 
 async function loadBrowseItems(memberId) {
   if (!DB) {
     if (memberId === "demo-2") {
-      browseItems = [{ id: "b1", name: "Italian cookbook", description: "Any popular one", url: "", priority: "medium", created_at: "2025-01-01T00:00:00Z" }];
+      browseItems = [{ id: "b1", name: "Italian cookbook", description: "Any popular one", url: "", priority: "medium", visibility: "everyone", created_at: "2025-01-01T00:00:00Z" }];
     } else if (memberId === "demo-3") {
       browseItems = [
-        { id: "b2", name: "LEGO Space set",    description: "", url: "", priority: "high",   created_at: "2025-01-01T00:00:00Z" },
-        { id: "b3", name: "Colored pencils",   description: "Professional grade, 72 count", url: "", priority: "medium", created_at: "2025-01-02T00:00:00Z" },
+        { id: "b2", name: "LEGO Space set",    description: "", url: "", priority: "high",   visibility: "everyone", created_at: "2025-01-01T00:00:00Z" },
+        { id: "b3", name: "Colored pencils",   description: "Professional grade, 72 count", url: "", priority: "medium", visibility: "adults", created_at: "2025-01-02T00:00:00Z" },
       ];
     } else {
       browseItems = [];
@@ -419,38 +416,21 @@ async function loadBrowseItems(memberId) {
     return;
   }
   const res = await dbRun(
-    "SELECT id, name, description, url, priority, created_at FROM app_wishlist__wish_items WHERE member_id = ? ORDER BY created_at DESC",
+    "SELECT id, name, description, url, priority, visibility, created_at FROM app_wishlist__wish_items WHERE member_id = ? ORDER BY created_at DESC",
     [memberId]
   );
   browseItems = res.rows ?? [];
 }
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
-async function setVisibility(v) {
-  myVisibility = v;
-  browseCache.clear();
-  if (DB && ME) {
-    const now = new Date().toISOString();
-    await dbRun(
-      `INSERT INTO app_wishlist__wishlists (member_id, visibility, updated_at)
-       VALUES (?, ?, ?)
-       ON CONFLICT (member_id)
-       DO UPDATE SET visibility = EXCLUDED.visibility, updated_at = EXCLUDED.updated_at`,
-      [ME.id, v, now]
-    );
-    allWishlists[ME.id] = { visibility: v };
-  }
-  render();
-}
-
 async function saveItem(data) {
   const now = new Date().toISOString();
 
   if (editingItemId) {
     if (DB && ME) {
       await dbRun(
-        "UPDATE app_wishlist__wish_items SET name = ?, description = ?, url = ?, priority = ?, updated_at = ? WHERE id = ? AND member_id = ?",
-        [data.name, data.description, data.url, data.priority, now, editingItemId, ME.id]
+        "UPDATE app_wishlist__wish_items SET name = ?, description = ?, url = ?, priority = ?, visibility = ?, updated_at = ? WHERE id = ? AND member_id = ?",
+        [data.name, data.description, data.url, data.priority, data.visibility, now, editingItemId, ME.id]
       );
     }
     myItems = myItems.map(i =>
@@ -464,21 +444,21 @@ async function saveItem(data) {
     if (DB && ME) {
       await Promise.all([
         dbRun(
-          "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-          [id, ME.id, data.name, data.description, data.url, data.priority, now, now]
+          "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          [id, ME.id, data.name, data.description, data.url, data.priority, data.visibility, now, now]
         ),
         dbRun(
           `INSERT INTO app_wishlist__wishlists (member_id, visibility, updated_at)
-           VALUES (?, ?, ?)
+           VALUES (?, 'everyone', ?)
            ON CONFLICT (member_id) DO NOTHING`,
-          [ME.id, myVisibility, now]
+          [ME.id, now]
         ),
       ]);
     }
 
     myItems = [item, ...myItems];
     if (!allWishlists[ownerId]) {
-      allWishlists[ownerId] = { visibility: myVisibility };
+      allWishlists[ownerId] = {};
     }
   }
 }
@@ -498,6 +478,7 @@ window.closeModal = closeModal;
 
 function openItemModal(item = null) {
   editingItemId = item?.id ?? null;
+  const vis = item?.visibility ?? "everyone";
   openModal(`
     <h3>${item ? "Edit Item" : "Add to Wish List"}</h3>
     <div class="form-group">
@@ -520,6 +501,15 @@ function openItemModal(item = null) {
         <option value="low"    ${item?.priority === "low"                    ? "selected" : ""}>Low</option>
       </select>
     </div>
+    <div class="form-group">
+      <label>Who can see this</label>
+      <div class="vis-pills" id="f-vis-pills">
+        <button type="button" class="vis-pill ${vis === "everyone" ? "active" : ""}" data-vis="everyone" onclick="setItemVis('everyone')">🌍 Everyone</button>
+        <button type="button" class="vis-pill ${vis === "adults"   ? "active" : ""}" data-vis="adults"   onclick="setItemVis('adults')">🔒 Adults only</button>
+        <button type="button" class="vis-pill ${vis === "private"  ? "active" : ""}" data-vis="private"  onclick="setItemVis('private')">🙈 Only me</button>
+      </div>
+      <input type="hidden" id="f-visibility" value="${vis}" />
+    </div>
     <div id="f-error" class="error-msg" style="display:none"></div>
     <div class="modal-actions">
       <button class="btn btn-ghost"   onclick="closeModal()">Cancel</button>
@@ -528,6 +518,13 @@ function openItemModal(item = null) {
   `);
   document.getElementById("f-name")?.focus();
 }
+
+window.setItemVis = function(v) {
+  document.getElementById("f-visibility").value = v;
+  document.querySelectorAll("#f-vis-pills .vis-pill").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.vis === v);
+  });
+};
 
 window.openAddModal = () => openItemModal();
 window.editItem = function(id) {
@@ -556,6 +553,7 @@ window.submitItem = async function() {
       description: document.getElementById("f-desc").value.trim(),
       url:         document.getElementById("f-url").value.trim(),
       priority:    document.getElementById("f-priority").value,
+      visibility:  document.getElementById("f-visibility").value,
     });
     closeModal();
     render();
@@ -574,8 +572,6 @@ window.deleteItem = async function(id) {
   myItems = myItems.filter(i => i.id !== id);
   render();
 };
-
-window.setVisibility = setVisibility;
 
 window.setTab = async function(t) {
   tab = t;
@@ -621,6 +617,13 @@ function priorityBadgeHtml(p) {
   return `<span class="badge" style="background:${info.bg};color:${info.color}">${esc(info.label)}</span>`;
 }
 
+function visibilityBadgeHtml(visibility) {
+  if (!visibility || visibility === "everyone") return "";
+  if (visibility === "adults")  return `<span class="badge" style="background:#fef3c7;color:#d97706">Adults</span>`;
+  if (visibility === "private") return `<span class="badge" style="background:#f3f4f6;color:#6b7280">Private</span>`;
+  return "";
+}
+
 function mColor(id) { return memberColor(id, members); }
 
 function renderItemRow(item, isOwner) {
@@ -630,6 +633,7 @@ function renderItemRow(item, isOwner) {
       <div class="item-main">
         <div class="item-top">
           ${priorityBadgeHtml(item.priority)}
+          ${isOwner ? visibilityBadgeHtml(item.visibility) : ""}
           <span class="item-name">${esc(item.name)}</span>
           ${hasUrl ? `<a href="${esc(item.url)}" target="_blank" rel="noopener" class="item-link" title="Open link">🔗</a>` : ""}
         </div>
@@ -662,14 +666,6 @@ function renderMyList() {
     <div class="tabs">
       <button class="tab active" onclick="setTab('mine')">My List</button>
       <button class="tab" onclick="setTab('browse')">Browse Family</button>
-    </div>
-
-    <div class="visibility-bar">
-      <span class="visibility-label">Who can see my list:</span>
-      <div class="vis-pills">
-        <button class="vis-pill ${myVisibility === "everyone"    ? "active" : ""}" onclick="setVisibility('everyone')">🌍 Everyone</button>
-        <button class="vis-pill ${myVisibility === "adults_only" ? "active" : ""}" onclick="setVisibility('adults_only')">🔒 Adults only</button>
-      </div>
     </div>
 
     ${sorted.length === 0
@@ -729,8 +725,10 @@ function renderBrowse() {
 }
 
 function renderBrowseList() {
+  const me = effectiveMe();
+  const viewer = members.find(m => m.id === me?.id) ?? me;
   const member = members.find(m => m.id === browseTarget);
-  const sorted = sortItems(browseItems);
+  const sorted = sortItems(browseItems.filter(i => canSeeItem(i, viewer)));
   const color  = mColor(browseTarget);
 
   return `
