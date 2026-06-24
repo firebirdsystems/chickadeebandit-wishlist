@@ -332,10 +332,9 @@ const ME      = window.__CURRENT_MEMBER ?? null;
 let members      = [];
 let tab          = "mine";
 let myItems      = [];
-let allWishlists = {};  // { [memberId]: { visibility } }
+let allWishlists = {};  // { [memberId]: true } — members who have at least one item
 let browseTarget = null;
 let browseItems  = [];
-const browseCache = new Map();
 let editingItemId = null;
 
 // ─── DB helper ────────────────────────────────────────────────────────────────
@@ -385,7 +384,7 @@ async function loadMyData() {
 
   const meId = ME?.id;
   const [wlRes, itemRes] = await Promise.all([
-    dbRun("SELECT member_id FROM app_wishlist__wishlists"),
+    dbRun("SELECT DISTINCT member_id FROM app_wishlist__wish_items"),
     meId
       ? dbRun(
           "SELECT id, member_id, name, description, url, priority, visibility, created_at FROM app_wishlist__wish_items WHERE member_id = ? ORDER BY created_at DESC",
@@ -442,18 +441,10 @@ async function saveItem(data) {
     const item = { id, member_id: ownerId, ...data, created_at: now, updated_at: now };
 
     if (DB && ME) {
-      await Promise.all([
-        dbRun(
-          "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-          [id, ME.id, data.name, data.description, data.url, data.priority, data.visibility, now, now]
-        ),
-        dbRun(
-          `INSERT INTO app_wishlist__wishlists (member_id, visibility, updated_at)
-           VALUES (?, 'everyone', ?)
-           ON CONFLICT (member_id) DO NOTHING`,
-          [ME.id, now]
-        ),
-      ]);
+      await dbRun(
+        "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [id, ME.id, data.name, data.description, data.url, data.priority, data.visibility, now, now]
+      );
     }
 
     myItems = [item, ...myItems];
@@ -589,15 +580,9 @@ window.setTab = async function(t) {
 
 window.selectBrowseMember = async function(memberId) {
   browseTarget = memberId;
-  if (browseCache.has(memberId)) {
-    browseItems = browseCache.get(memberId);
-    render();
-    return;
-  }
   browseItems = [];
   render();
   await loadBrowseItems(memberId);
-  browseCache.set(memberId, browseItems);
   render();
 };
 
