@@ -1,10 +1,3 @@
-CREATE TABLE IF NOT EXISTS app_wishlist__wishlists (
-  member_id    TEXT NOT NULL,
-  visibility   TEXT NOT NULL DEFAULT 'everyone',
-  updated_at   TEXT NOT NULL,
-  PRIMARY KEY (member_id)
-);
-
 CREATE TABLE IF NOT EXISTS app_wishlist__wish_items (
   id           TEXT NOT NULL,
   member_id    TEXT NOT NULL,
