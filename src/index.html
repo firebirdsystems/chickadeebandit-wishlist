@@ -626,8 +626,8 @@ function renderItemRow(item, isOwner) {
       </div>
       ${isOwner ? `
         <div class="item-actions">
-          <button class="btn-icon-sm" onclick="editItem('${item.id}')" title="Edit">✏️</button>
-          <button class="btn-icon-sm danger" onclick="deleteItem('${item.id}')" title="Remove">🗑</button>
+          <button class="btn-icon-sm" data-action="edit-item" data-id="${esc(item.id)}" title="Edit">✏️</button>
+          <button class="btn-icon-sm danger" data-action="delete-item" data-id="${esc(item.id)}" title="Remove">🗑</button>
         </div>
       ` : ""}
     </div>
@@ -737,8 +737,23 @@ function render() {
   document.getElementById("root").innerHTML = tab === "mine" ? renderMyList() : renderBrowse();
 }
 
+// ─── Event delegation ─────────────────────────────────────────────────────────
+// item.id is an attacker-controllable DB value; bind edit/remove via data-* on the
+// persistent #root container rather than inline onclick JS-string handlers, where
+// HTML-escaping would not prevent a breakout after attribute entity-decoding.
+function setupDelegation() {
+  document.getElementById("root").addEventListener("click", (e) => {
+    const el = e.target.closest("[data-action]");
+    if (!el) return;
+    const { action, id } = el.dataset;
+    if (action === "edit-item") window.editItem(id);
+    else if (action === "delete-item") window.deleteItem(id);
+  });
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 (async () => {
+  setupDelegation();
   await Promise.all([loadMembers(), loadMyData()]);
   render();
 
