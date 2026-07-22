@@ -1,5 +1,6 @@
 {
   "id": "wishlist",
+  "contexts": ["household", "shared_space"],
   "name": "Wish List",
   "version": "1.0.0",
   "description": "Personal gift wishlists for every family member. Add items with priorities and links; family can browse each other's lists.",
