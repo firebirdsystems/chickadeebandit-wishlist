@@ -10,6 +10,12 @@
   "category": "family",
   "tags": ["wishlist", "gifts", "holidays", "birthdays"],
   "storage": "db",
+    "member_references": {
+      "wish_items": {
+        "column": "member_id",
+        "on_removed": "delete"
+      }
+    },
   "row_policies": {
     "wish_items": {
       "kind": "owner_or_visibility",
