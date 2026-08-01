@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canSeeMember, canSeeItem, priorityOrder, sortItems, priorityLabel } from "../src/logic.js";
+import { canSeeMember, canSeeItem, priorityOrder, sortItems, priorityLabel, searchableFields } from "../src/logic.js";
 
 const members = [
   { id: "adult-1", name: "Alex",   role: "adult" },
@@ -114,5 +114,15 @@ describe("priorityLabel", () => {
 
   it("falls back to medium for unknown priority", () => {
     expect(priorityLabel("???").label).toBe("Medium");
+  });
+});
+
+describe("searchableFields", () => {
+  it("matches on the description and link, not just the item name", () => {
+    const fields = searchableFields({
+      name: "Trainers", description: "blue, size 9", url: "https://shop.example/blue", priority: "high",
+    });
+    expect(fields).toContain("blue, size 9");
+    expect(fields).toContain("https://shop.example/blue");
   });
 });

@@ -312,6 +312,13 @@
       font-size: 0.85rem;
       margin-bottom: 12px;
     }
+    .search-row { margin-bottom: 12px; }
+    .search-input {
+      width: 100%; border: 1.5px solid var(--border-mid, var(--border, #d1d5db));
+      border-radius: 8px; padding: 9px 11px; font: inherit;
+      background: var(--surface, var(--card, #fff)); color: var(--text, inherit);
+    }
+    .search-input:focus { outline: none; border-color: var(--accent, #6366f1); }
   </style>
 </head>
 <body>
@@ -320,8 +327,8 @@
 </div>
 
 <script type="module">
-import { memberColor, initial, esc, hubConfirm } from "/hub-sdk.js";
-import { canSeeMember, canSeeItem, priorityLabel, sortItems } from "./logic.js";
+import { memberColor, initial, esc, hubConfirm, searchMatch } from "/hub-sdk.js";
+import { canSeeMember, canSeeItem, priorityLabel, sortItems, searchableFields } from "./logic.js";
 
 const CONTEXT = window.__CONTEXT_URL ?? "";
 const DB      = window.__DB_URL      ?? "";
@@ -331,6 +338,7 @@ const ME      = window.__CURRENT_MEMBER ?? null;
 // ─── State ────────────────────────────────────────────────────────────────────
 let members      = [];
 let tab          = "mine";
+let searchQ = "";       // in-app search (see logic.js searchableFields)
 let myItems      = [];
 let allWishlists = {};  // { [memberId]: true } — members who have at least one item
 let browseTarget = null;
@@ -635,9 +643,13 @@ function renderItemRow(item, isOwner) {
 }
 
 // ─── Render ───────────────────────────────────────────────────────────────────
+function matchingItems(items) {
+  return searchQ ? items.filter(i => searchMatch(searchQ, searchableFields(i))) : items;
+}
+
 function renderMyList() {
   const me = effectiveMe();
-  const sorted = sortItems(myItems);
+  const sorted = matchingItems(sortItems(myItems));
 
   return `
     <div class="page-header">
@@ -653,12 +665,15 @@ function renderMyList() {
       <button class="tab" onclick="setTab('browse')">Browse Family</button>
     </div>
 
+    ${myItems.length ? `<div class="search-row"><input id="search" class="search-input" type="search" placeholder="Search your list…" aria-label="Search your list" value="${esc(searchQ)}" /></div>` : ""}
     ${sorted.length === 0
-      ? `<div class="empty">
+      ? (searchQ
+        ? `<div class="empty"><div class="empty-icon">🔍</div><p>Nothing matches "${esc(searchQ)}".</p></div>`
+        : `<div class="empty">
            <div class="empty-icon">🎁</div>
            <p>Your wish list is empty.</p>
            <p style="margin-top:6px;font-size:0.85rem">Add items to let your family know what you'd love!</p>
-         </div>`
+         </div>`)
       : `<div class="items-list">${sorted.map(i => renderItemRow(i, true)).join("")}</div>`
     }
   `;
@@ -713,7 +728,7 @@ function renderBrowseList() {
   const me = effectiveMe();
   const viewer = members.find(m => m.id === me?.id) ?? me;
   const member = members.find(m => m.id === browseTarget);
-  const sorted = sortItems(browseItems.filter(i => canSeeItem(i, viewer)));
+  const sorted = matchingItems(sortItems(browseItems.filter(i => canSeeItem(i, viewer))));
   const color  = mColor(browseTarget);
 
   return `
@@ -723,11 +738,14 @@ function renderBrowseList() {
       <span class="browse-count">${sorted.length} item${sorted.length !== 1 ? "s" : ""}</span>
     </div>
 
+    ${browseItems.length ? `<div class="search-row"><input id="search" class="search-input" type="search" placeholder="Search this list…" aria-label="Search this list" value="${esc(searchQ)}" /></div>` : ""}
     ${sorted.length === 0
-      ? `<div class="empty" style="padding:24px 0">
+      ? (searchQ
+        ? `<div class="empty" style="padding:24px 0"><div class="empty-icon" style="font-size:2rem">🔍</div><p>Nothing matches "${esc(searchQ)}".</p></div>`
+        : `<div class="empty" style="padding:24px 0">
            <div class="empty-icon" style="font-size:2rem">🎁</div>
            <p>${esc(member?.name ?? "They")}'s list is empty.</p>
-         </div>`
+         </div>`)
       : `<div class="items-list">${sorted.map(i => renderItemRow(i, false)).join("")}</div>`
     }
   `;
@@ -736,6 +754,17 @@ function renderBrowseList() {
 function render() {
   document.getElementById("root").innerHTML = tab === "mine" ? renderMyList() : renderBrowse();
 }
+
+// Both views are rendered whole, so re-render and put the caret back rather
+// than trying to swap a list-only container.
+document.addEventListener("input", (e) => {
+  if (e.target.id !== "search") return;
+  searchQ = e.target.value;
+  const caret = e.target.selectionStart;
+  render();
+  const next = document.getElementById("search");
+  if (next) { next.focus(); next.setSelectionRange(caret, caret); }
+});
 
 // ─── Event delegation ─────────────────────────────────────────────────────────
 // item.id is an attacker-controllable DB value; bind edit/remove via data-* on the

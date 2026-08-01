@@ -42,3 +42,13 @@ export function priorityLabel(priority) {
     default:     return { label: "Medium", color: "#d97706", bg: "#fef3c7" };
   }
 }
+
+/**
+ * Fields the in-app search matches against (see hub-sdk `searchMatch`).
+ * The description and the link both count: a wish is often remembered
+ * by the thing itself ("the blue running shoes") or by where it came
+ * from, not by whatever name it was saved under.
+ */
+export function searchableFields(item) {
+  return [item.name, item.description, item.url, item.priority];
+}
