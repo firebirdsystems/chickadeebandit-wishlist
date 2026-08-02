@@ -10,6 +10,48 @@
   "category": "family",
   "tags": ["wishlist", "gifts", "holidays", "birthdays"],
   "storage": "db",
+  "automation_actions": {
+    "add_wish": {
+      "title": "Add to someone's wish list",
+      "description": "Put an item on a member's wish list when another app's event fires — something they asked for, or a gift idea captured elsewhere.",
+      "params": {
+        "member_id": {
+          "type": "member",
+          "label": "Whose list",
+          "required": true
+        },
+        "name": {
+          "type": "text",
+          "label": "What they want",
+          "required": true
+        },
+        "description": {
+          "type": "text",
+          "label": "Details",
+          "default": ""
+        }
+      },
+      "dedupe": {
+        "table": "wish_items",
+        "column": "source_event_id"
+      },
+      "steps": [
+        {
+          "op": "insert",
+          "table": "wish_items",
+          "values": {
+            "id": "$uuid",
+            "member_id": ":member_id",
+            "name": ":name",
+            "description": ":description",
+            "created_at": "$now",
+            "updated_at": "$now",
+            "source_event_id": "$event_id"
+          }
+        }
+      ]
+    }
+  },
     "member_references": {
       "wish_items": {
         "column": "member_id",
@@ -35,6 +77,9 @@
     "default_audience": "everyone",
     "requires_approval": false
   },
+  "publishes": ["wish.added"],
+  "publish_acls": {"wish.added": {"require_role": "member"}},
+  "glance": {"source": {"kind": "sql", "query": "SELECT name AS title, priority AS subtitle, member_id AS member_id FROM app_wishlist__wish_items ORDER BY created_at DESC LIMIT 3"}, "display": {"template": "list", "title": "title", "subtitle": "subtitle", "owner": "member_id"}},
   "nav": { "label": "Wish List" },
   "resource_limits": {
     "max_db_bytes": 10485760

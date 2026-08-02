@@ -335,6 +335,22 @@ const DB      = window.__DB_URL      ?? "";
 const APP_ID  = window.__APP_ID      ?? "wishlist";
 const ME      = window.__CURRENT_MEMBER ?? null;
 
+const EVENTS = window.__EVENTS_URL ?? "";
+
+async function publishEvent(type, subjectId, payload = {}) {
+  if (!EVENTS) return;
+  try {
+    await fetch(EVENTS, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type, subject_id: subjectId, payload }),
+    });
+  } catch {
+    // Best-effort: the row is already written, so a failed publish is not fatal.
+  }
+}
+
+
 // ─── State ────────────────────────────────────────────────────────────────────
 let members      = [];
 let tab          = "mine";
@@ -453,6 +469,15 @@ async function saveItem(data) {
         "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [id, ME.id, data.name, data.description, data.url, data.priority, data.visibility, now, now]
       );
+      // visibility travels with the event so a consuming rule can respect the
+      // same audience the row policy enforces rather than re-broadcasting a
+      // wish the owner kept private.
+      await publishEvent("wish.added", id, {
+        member_id: ME.id,
+        name: data.name,
+        priority: data.priority,
+        visibility: data.visibility,
+      });
     }
 
     myItems = [item, ...myItems];
