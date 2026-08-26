@@ -10,6 +10,9 @@
   "category": "family",
   "tags": ["wishlist", "gifts", "holidays", "birthdays"],
   "storage": "db",
+  "preload": {
+    "wish_items": {"sql": "SELECT DISTINCT member_id FROM app_wishlist__wish_items"}
+  },
   "automation_actions": {
     "add_wish": {
       "title": "Add to someone's wish list",
