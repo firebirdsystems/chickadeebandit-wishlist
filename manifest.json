@@ -2,7 +2,7 @@
   "id": "wishlist",
   "contexts": ["household", "shared_space"],
   "name": "Wish List",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Personal gift wishlists for every family member. Add items with priorities and links; family can browse each other's lists.",
   "entrypoint": "index.html",
   "runtime": "static",
@@ -71,7 +71,7 @@
       "write_owner_only": true
     }
   },
-  "db_plaintext_columns": ["visibility"],
+  "db_plaintext_columns": ["visibility", "priority"],
   "data_access": {
     "reads": ["family.members"],
     "writes": []
