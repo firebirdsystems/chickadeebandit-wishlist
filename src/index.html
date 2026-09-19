@@ -19,8 +19,8 @@
       --accent-hover: var(--hub-primary-hover, #374151);
       --accent-fg:    var(--hub-primary-fg, #ffffff);
       --accent-light: #f3f4f6;
-      --red:          #dc2626;
-      --red-light:    #fee2e2;
+      --red:          var(--hub-tint-danger-fg, #dc2626);
+      --red-light:    var(--hub-tint-danger, #fee2e2);
       --radius:       var(--hub-radius, 0.5rem);
       --shadow:       0 1px 3px rgba(0,0,0,.07);
       --shadow-md:    0 4px 12px rgba(0,0,0,.10);
@@ -191,7 +191,7 @@
       transition: background .1s;
     }
     .item-row:last-child { border-bottom: none; }
-    .item-row:hover { background: #fafafa; }
+    .item-row:hover { background: var(--bg); }
     .item-main { flex: 1; min-width: 0; }
     .item-top {
       display: flex;
