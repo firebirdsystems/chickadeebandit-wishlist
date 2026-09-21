@@ -1,22 +1,32 @@
 {
   "id": "wishlist",
-  "contexts": ["household", "shared_space"],
+  "contexts": [
+    "household",
+    "shared_space"
+  ],
   "name": "Wish List",
   "version": "1.0.1",
   "description": "Personal gift wishlists for every family member. Add items with priorities and links; family can browse each other's lists.",
   "entrypoint": "index.html",
   "runtime": "static",
-  "icon": "🎁",
+  "icon": "\ud83c\udf81",
   "category": "family",
-  "tags": ["wishlist", "gifts", "holidays", "birthdays"],
+  "tags": [
+    "wishlist",
+    "gifts",
+    "holidays",
+    "birthdays"
+  ],
   "storage": "db",
   "preload": {
-    "wish_items": {"sql": "SELECT DISTINCT member_id FROM app_wishlist__wish_items"}
+    "wish_items": {
+      "sql": "SELECT DISTINCT member_id FROM app_wishlist__wish_items"
+    }
   },
   "automation_actions": {
     "add_wish": {
       "title": "Add to someone's wish list",
-      "description": "Put an item on a member's wish list when another app's event fires — something they asked for, or a gift idea captured elsewhere.",
+      "description": "Put an item on a member's wish list when another app's event fires \u2014 something they asked for, or a gift idea captured elsewhere.",
       "params": {
         "member_id": {
           "type": "member",
@@ -55,36 +65,133 @@
       ]
     }
   },
-    "member_references": {
-      "wish_items": {
-        "column": "member_id",
-        "on_removed": "delete"
-      }
+  "member_references": {
+    "wish_items": {
+      "column": "member_id",
+      "on_removed": "delete"
     },
+    "lists": {
+      "column": "member_id",
+      "id_column": "member_id",
+      "on_removed": "delete"
+    }
+  },
   "row_policies": {
     "wish_items": {
       "kind": "owner_or_visibility",
       "member_column": "member_id",
       "visibility_column": "visibility",
-      "everyone_values": ["everyone"],
-      "adult_values": ["adults", "everyone"],
+      "everyone_values": [
+        "everyone"
+      ],
+      "adult_values": [
+        "adults",
+        "everyone"
+      ],
       "write_owner_only": true
+    },
+    "lists": {
+      "kind": "adult_writable"
     }
   },
-  "db_plaintext_columns": ["visibility", "priority"],
+  "db_plaintext_columns": [
+    "visibility",
+    "priority"
+  ],
   "data_access": {
-    "reads": ["family.members"],
+    "reads": [
+      "family.members"
+    ],
     "writes": []
   },
   "permissions": {
     "default_audience": "everyone",
     "requires_approval": false
   },
-  "publishes": ["wish.added"],
-  "publish_acls": {"wish.added": {"require_role": "member"}},
-  "glance": {"source": {"kind": "sql", "query": "SELECT name AS title, priority AS subtitle, member_id AS member_id FROM app_wishlist__wish_items ORDER BY created_at DESC LIMIT 3"}, "display": {"template": "list", "title": "title", "subtitle": "subtitle", "owner": "member_id"}},
-  "nav": { "label": "Wish List" },
+  "publishes": [
+    "wish.added"
+  ],
+  "publish_acls": {
+    "wish.added": {
+      "require_role": "member"
+    }
+  },
+  "glance": {
+    "source": {
+      "kind": "sql",
+      "query": "SELECT name AS title, priority AS subtitle, member_id AS member_id FROM app_wishlist__wish_items ORDER BY created_at DESC LIMIT 3"
+    },
+    "display": {
+      "template": "list",
+      "title": "title",
+      "subtitle": "subtitle",
+      "owner": "member_id"
+    }
+  },
+  "nav": {
+    "label": "Wish List"
+  },
   "resource_limits": {
     "max_db_bytes": 10485760
+  },
+  "shareable": {
+    "list": {
+      "table": "lists",
+      "id_column": "member_id",
+      "title_column": "title",
+      "columns": [
+        {
+          "column": "updated_at",
+          "label": "Shared",
+          "format": "date"
+        }
+      ],
+      "feed": {
+        "label": "Wishes",
+        "table": "wish_items",
+        "fk_column": "member_id",
+        "columns": [
+          {
+            "column": "name",
+            "label": "Item",
+            "role": "heading"
+          },
+          {
+            "column": "description",
+            "label": "Details",
+            "format": "multiline",
+            "role": "body"
+          },
+          {
+            "column": "priority",
+            "label": "Priority",
+            "role": "detail",
+            "value_labels": {
+              "high": "High",
+              "medium": "Medium",
+              "low": "Low"
+            }
+          },
+          {
+            "column": "url",
+            "label": "Link",
+            "format": "url",
+            "role": "detail"
+          }
+        ],
+        "where": [
+          {
+            "column": "visibility",
+            "values": [
+              "everyone"
+            ]
+          }
+        ],
+        "order_column": "created_at",
+        "order": "newest",
+        "max_items": 100,
+        "empty_text": "Nothing on this wish list yet."
+      }
+    }
   }
 }

@@ -288,6 +288,58 @@
     .form-group select:focus { border-color: var(--accent); }
     .form-group textarea { resize: vertical; min-height: 60px; }
 
+    /* ── Sharing ────────────────────────────── */
+    .header-actions { display: flex; align-items: center; gap: 8px; }
+    .btn-sm { padding: 4px 10px; font-size: 0.8rem; }
+    .btn-danger { background: transparent; color: var(--red); border: 1.5px solid var(--red-light); }
+    .btn-danger:hover:not(:disabled) { border-color: var(--red); }
+
+    .share-intro { font-size: 0.85rem; color: var(--muted); margin-bottom: 10px; }
+    .share-scope {
+      font-size: 0.85rem;
+      background: var(--bg);
+      border-radius: var(--radius);
+      padding: 8px 10px;
+      margin-bottom: 12px;
+    }
+    .share-error {
+      font-size: 0.85rem;
+      color: var(--red);
+      background: var(--red-light);
+      border-radius: var(--radius);
+      padding: 8px 10px;
+      margin-bottom: 12px;
+    }
+    .share-empty { font-size: 0.85rem; color: var(--muted); padding: 8px 0; }
+    .share-row { padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .share-url {
+      width: 100%;
+      font-size: 0.8rem;
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .share-meta { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+    .share-row-actions { display: flex; gap: 8px; margin-top: 6px; }
+    .share-create {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+    .share-expiry-label { font-size: 0.85rem; color: var(--muted); }
+    .share-expiry {
+      padding: 6px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.85rem;
+    }
+
     .modal-actions {
       display: flex;
       gap: 10px;
@@ -327,8 +379,13 @@
 </div>
 
 <script type="module">
-import { memberColor, initial, esc, hubConfirm, searchMatch } from "/hub-sdk.js";
-import { canSeeMember, canSeeItem, priorityLabel, sortItems, searchableFields } from "./logic.js";
+import { memberColor, initial, esc, hubConfirm, hubAlert, searchMatch,
+         createShareHelper, createDbHelper, sendHubNotification,
+         activeShareLinks, SHARE_EXPIRY_CHOICES, DEFAULT_SHARE_EXPIRY_HOURS } from "/hub-sdk.js";
+import { canSeeMember, canSeeItem, priorityLabel, sortItems, searchableFields,
+         canShare, changedARow } from "./logic.js";
+import { createShareUi } from "./share.js";
+import { createModal } from "./modal.js";
 
 const CONTEXT = window.__CONTEXT_URL ?? "";
 const DB      = window.__DB_URL      ?? "";
@@ -336,6 +393,12 @@ const APP_ID  = window.__APP_ID      ?? "wishlist";
 const ME      = window.__CURRENT_MEMBER ?? null;
 
 const EVENTS = window.__EVENTS_URL ?? "";
+
+// External share links. `share.enabled` is false whenever the hub injected no
+// URLs — which is also how the dev server runs — so every share affordance
+// below is behind it and the app still works with the feature absent.
+const share = createShareHelper(
+  window.__SHARE_CREATE_URL, window.__SHARE_REVOKE_URL, window.__SHARE_LIST_URL);
 
 async function publishEvent(type, subjectId, payload = {}) {
   if (!EVENTS) return;
@@ -362,17 +425,23 @@ let browseItems  = [];
 let editingItemId = null;
 
 // ─── DB helper ────────────────────────────────────────────────────────────────
-async function dbRun(sql, params = []) {
-  if (!DB) return { rows: [] };
-  try {
-    const res = await fetch(DB, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sql, params }),
-    });
-    return await res.json();
-  } catch { return { rows: [] }; }
-}
+/**
+ * The hub SDK's database helper. It THROWS on a refused statement (403 row
+ * policy, 400 bad statement, 507 over quota — all of which arrive as a JSON
+ * `error` body that fetch does not reject on) and lets a network failure reject
+ * on its own.
+ *
+ * That is the whole reason this app no longer has a hand-rolled `dbRun`. The
+ * local one answered every failure with `{ rows: [] }`, which is also what a
+ * genuinely empty table looks like — so reads reported "nothing here" and
+ * writes reported success, and three separate defects traced back to it.
+ * Leniency is still available where it is wanted, but it now has to be asked
+ * for, one `.catch` at a time, where a reader can see the decision.
+ */
+const db = createDbHelper(DB);
+
+/** What a write that touched no rows means for an edit of one specific item. */
+const ITEM_GONE = "That item is no longer on your list — it may have been removed on another device.";
 
 // ─── Load ─────────────────────────────────────────────────────────────────────
 async function loadMembers() {
@@ -407,13 +476,18 @@ async function loadMyData() {
   }
 
   const meId = ME?.id;
+  // Deliberately lenient: this is the first paint, and a blank list with the
+  // page working beats no page at all. The share modal does NOT read these —
+  // it queries for itself, because an empty list there is a promise about what
+  // a public link exposes rather than a display.
+  const empty = () => ({ rows: [] });
   const [wlRes, itemRes] = await Promise.all([
-    dbRun("SELECT DISTINCT member_id FROM app_wishlist__wish_items"),
+    db("SELECT DISTINCT member_id FROM app_wishlist__wish_items").catch(empty),
     meId
-      ? dbRun(
+      ? db(
           "SELECT id, member_id, name, description, url, priority, visibility, created_at FROM app_wishlist__wish_items WHERE member_id = ? ORDER BY created_at DESC",
           [meId]
-        )
+        ).catch(empty)
       : Promise.resolve({ rows: [] }),
   ]);
 
@@ -424,40 +498,89 @@ async function loadMyData() {
   myItems = itemRes.rows ?? [];
 }
 
-async function loadBrowseItems(memberId) {
+/**
+ * A member's wish items as THIS viewer may read them. Returns the rows rather
+ * than assigning them: the share modal needs the same list without disturbing
+ * what the browse view is showing.
+ */
+async function fetchItemsFor(memberId) {
+  // Deliberately NOT short-circuited to `myItems` for the owner. That cache is
+  // `[]` after a failed first load, and this read is the share modal's basis
+  // for telling an adult what a link would expose — an answer that must never
+  // be "nothing" because a read failed. A fresh query also picks up items
+  // added in another tab.
   if (!DB) {
+    if (memberId === ME?.id) return myItems;
     if (memberId === "demo-2") {
-      browseItems = [{ id: "b1", name: "Italian cookbook", description: "Any popular one", url: "", priority: "medium", visibility: "everyone", created_at: "2025-01-01T00:00:00Z" }];
-    } else if (memberId === "demo-3") {
-      browseItems = [
+      return [{ id: "b1", name: "Italian cookbook", description: "Any popular one", url: "", priority: "medium", visibility: "everyone", created_at: "2025-01-01T00:00:00Z" }];
+    }
+    if (memberId === "demo-3") {
+      return [
         { id: "b2", name: "LEGO Space set",    description: "", url: "", priority: "high",   visibility: "everyone", created_at: "2025-01-01T00:00:00Z" },
         { id: "b3", name: "Colored pencils",   description: "Professional grade, 72 count", url: "", priority: "medium", visibility: "adults", created_at: "2025-01-02T00:00:00Z" },
       ];
-    } else {
-      browseItems = [];
     }
-    return;
+    return [];
   }
-  const res = await dbRun(
+  // Strict by default now: `db` throws on a refusal and a network failure
+  // rejects, so the share modal can never mistake either for an empty list.
+  const res = await db(
     "SELECT id, name, description, url, priority, visibility, created_at FROM app_wishlist__wish_items WHERE member_id = ? ORDER BY created_at DESC",
     [memberId]
   );
-  browseItems = res.rows ?? [];
+  return res.rows;
+}
+
+let browseSeq = 0;
+/**
+ * Load a member's items into the browse view, discarding a response that a
+ * newer selection has already superseded. Two clicks put two requests in
+ * flight, and without this the slower one wins — showing one member's wishes
+ * under another member's name and avatar.
+ */
+async function loadBrowseItems(memberId) {
+  const seq = ++browseSeq;
+  let rows = [];
+  try {
+    rows = await fetchItemsFor(memberId);
+  } catch {
+    // The browse view has always shown an empty list when a read fails, and an
+    // empty list there is a display, not a promise. The share modal is the one
+    // caller that cannot treat the two as the same, so it takes the throw.
+    rows = [];
+  }
+  if (seq !== browseSeq) return;
+  browseItems = rows;
 }
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
 async function saveItem(data) {
   const now = new Date().toISOString();
+  // Snapshot before the first await. `editingItemId` is module state that the
+  // member can change mid-save by cancelling and opening another item — the
+  // UPDATE would then land on the row it was written for while local state
+  // moved a different one.
+  const editingId = editingItemId;
 
-  if (editingItemId) {
+  if (editingId) {
     if (DB && ME) {
-      await dbRun(
+      const res = await db(
         "UPDATE app_wishlist__wish_items SET name = ?, description = ?, url = ?, priority = ?, visibility = ?, updated_at = ? WHERE id = ? AND member_id = ?",
-        [data.name, data.description, data.url, data.priority, data.visibility, now, editingItemId, ME.id]
+        [data.name, data.description, data.url, data.priority, data.visibility, now, editingId, ME.id]
       );
+      // See changedARow: `db` throws on a refusal, but a statement that RAN
+      // and matched nothing is a 200, and for an edit of one specific row that
+      // means the row is gone.
+      if (!changedARow(res)) {
+        // Drop it locally too. Leaving the phantom on screen means every retry
+        // edits a row that is not there and fails identically, with no way out
+        // but a reload.
+        myItems = myItems.filter(i => i.id !== editingId);
+        throw new Error(ITEM_GONE);
+      }
     }
     myItems = myItems.map(i =>
-      i.id === editingItemId ? { ...i, ...data, updated_at: now } : i
+      i.id === editingId ? { ...i, ...data, updated_at: now } : i
     );
   } else {
     const id = crypto.randomUUID();
@@ -465,7 +588,10 @@ async function saveItem(data) {
     const item = { id, member_id: ownerId, ...data, created_at: now, updated_at: now };
 
     if (DB && ME) {
-      await dbRun(
+      // Throws if the row did not land, which skips the publish below: an event
+      // for a wish that does not exist is worse than no event, since automations
+      // in other apps act on it.
+      await db(
         "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [id, ME.id, data.name, data.description, data.url, data.priority, data.visibility, now, now]
       );
@@ -488,17 +614,40 @@ async function saveItem(data) {
 }
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
-let modalEl = null;
-function openModal(html) {
-  closeModal();
-  modalEl = document.createElement("div");
-  modalEl.className = "modal-backdrop";
-  modalEl.innerHTML = `<div class="modal">${html}</div>`;
-  modalEl.addEventListener("click", e => { if (e.target === modalEl) closeModal(); });
-  document.body.appendChild(modalEl);
-}
-function closeModal() { modalEl?.remove(); modalEl = null; }
+const modal = createModal({
+  onClick:  e => shareUi.handleClick(e),
+  onChange: e => shareUi.handleChange(e),
+});
+const openModal  = modal.open;
+const closeModal = modal.close;
 window.closeModal = closeModal;
+
+// ─── Sharing ──────────────────────────────────────────────────────────────────
+// Declared AFTER the modal, and that order is load-bearing: the deps object is
+// built eagerly, so `openModal: modal.open` reads `modal` the moment this runs.
+// The modal's own handlers reach back through arrows, which are not evaluated
+// until a click — so the cycle only works in this direction.
+// The share flow lives in src/share.js so it can be driven against a real DOM
+// in __tests__/share-ui.test.mjs — it is the only part of this app with
+// sequencing in it (overlapping reads, a modal that can be replaced mid-flight)
+// and the only part whose defects a source-level test cannot see.
+const shareUi = createShareUi({
+  share,
+  db,
+  esc,
+  confirm: hubConfirm,
+  getMe: () => ME,
+  getMembers: () => members,
+  getItemsFor: fetchItemsFor,
+  openModal: modal.open,
+  getModalEl: modal.current,
+  writeText: (text) => navigator.clipboard.writeText(text),
+  notify: sendHubNotification,
+  activeLinks: activeShareLinks,
+  expiryChoices: SHARE_EXPIRY_CHOICES,
+  defaultExpiryHours: DEFAULT_SHARE_EXPIRY_HOURS,
+});
+
 
 function openItemModal(item = null) {
   editingItemId = item?.id ?? null;
@@ -567,7 +716,8 @@ window.submitItem = async function() {
   }
   errEl.style.display = "none";
 
-  const btn = modalEl?.querySelector(".btn-primary");
+  const btn = modal.current()?.querySelector(".btn-primary");
+  const submittedFrom = modal.current();
   const originalLabel = editingItemId ? "Save" : "Add to List";
   if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
 
@@ -579,19 +729,45 @@ window.submitItem = async function() {
       priority:    document.getElementById("f-priority").value,
       visibility:  document.getElementById("f-visibility").value,
     });
-    closeModal();
+    // Only close the modal this submit came from: a slow save that finishes
+    // after the member opened something else would otherwise close that.
+    if (modal.current() === submittedFrom) closeModal();
     render();
-  } catch {
-    if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
-    errEl.textContent = "Something went wrong. Please try again.";
-    errEl.style.display = "block";
+  } catch (err) {
+    // Show what actually went wrong. The hub's own refusals carry the useful
+    // text (row policy, quota), and so does the "this row is gone" case — all
+    // of which a fixed "Something went wrong" was throwing away, leaving the
+    // member to guess and the distinction untestable.
+    const message = err?.message || "Something went wrong. Please try again.";
+    // ...but only into the form it was submitted from. `errEl` and `btn` were
+    // captured before the await, and if the member has since opened something
+    // else those nodes are detached — writing there reports the failure to
+    // nobody. The success path already checked this; the failure path did not,
+    // which is the half where staying silent actually costs something.
+    if (modal.current() === submittedFrom) {
+      if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
+      errEl.textContent = message;
+      errEl.style.display = "block";
+    } else {
+      await hubAlert(message);
+    }
+    render();
   }
 };
 
 window.deleteItem = async function(id) {
   if (!await hubConfirm({ message: "Remove this item?", confirmLabel: "Remove", destructive: true })) return;
   if (DB && ME) {
-    await dbRun("DELETE FROM app_wishlist__wish_items WHERE id = ? AND member_id = ?", [id, ME.id]);
+    try {
+      // No zero-row check: a delete that matched nothing has achieved what the
+      // member asked for, and complaining about it would be noise.
+      await db("DELETE FROM app_wishlist__wish_items WHERE id = ? AND member_id = ?", [id, ME.id]);
+    } catch {
+      // Dropping it locally would hide the item until the next load and then
+      // bring it back, with nothing said in between.
+      await hubAlert("Couldn\u2019t remove that item. Please try again.");
+      return;
+    }
   }
   myItems = myItems.filter(i => i.id !== id);
   render();
@@ -682,7 +858,10 @@ function renderMyList() {
         <h1>🎁 Wish List</h1>
         ${me ? `<div class="who">${esc(me.name)}</div>` : ""}
       </div>
-      <button class="btn btn-primary" onclick="openAddModal()">+ Add Item</button>
+      <div class="header-actions">
+        ${canShare(share.enabled, ME, ME) ? `<button class="btn btn-ghost" data-action="share" data-id="${esc(ME.id)}">Share</button>` : ""}
+        <button class="btn btn-primary" onclick="openAddModal()">+ Add Item</button>
+      </div>
     </div>
 
     <div class="tabs">
@@ -761,6 +940,7 @@ function renderBrowseList() {
       <span class="avatar-sm" style="background:${color}">${initial(member?.name ?? "?")}</span>
       <span class="browse-name">${esc(member?.name ?? "")}'s Wish List</span>
       <span class="browse-count">${sorted.length} item${sorted.length !== 1 ? "s" : ""}</span>
+      ${canShare(share.enabled, ME, member) ? `<button class="btn btn-ghost btn-sm" data-action="share" data-id="${esc(browseTarget)}">Share</button>` : ""}
     </div>
 
     ${browseItems.length ? `<div class="search-row"><input id="search" class="search-input" type="search" placeholder="Search this list…" aria-label="Search this list" value="${esc(searchQ)}" /></div>` : ""}
@@ -802,6 +982,7 @@ function setupDelegation() {
     const { action, id } = el.dataset;
     if (action === "edit-item") window.editItem(id);
     else if (action === "delete-item") window.deleteItem(id);
+    else if (action === "share") shareUi.open(id);
   });
 }
 

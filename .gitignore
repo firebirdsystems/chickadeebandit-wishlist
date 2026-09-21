@@ -2,3 +2,9 @@ dist/
 node_modules/
 .DS_Store
 .hub-sdk.js
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+graft/
+
+# Written and removed by __tests__/boot.test.mjs; never committed.
+src/__boot.generated.mjs
