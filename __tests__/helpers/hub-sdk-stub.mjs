@@ -52,3 +52,6 @@ export function createShareHelper(createUrl, revokeUrl, listUrl) {
     async revoke() { throw new Error("not used in the boot test"); },
   };
 }
+
+export const glyph = (name) => `<svg data-glyph="${name}"></svg>`;
+export const chickadee = (pose) => `<svg data-chickadee="${pose}"></svg>`;

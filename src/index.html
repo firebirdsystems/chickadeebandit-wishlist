@@ -354,7 +354,7 @@
       color: var(--muted);
       font-size: 0.9rem;
     }
-    .empty-icon { font-size: 2.5rem; margin-bottom: 10px; }
+    .empty-icon { margin-bottom: 10px; }
     .loading { text-align: center; padding: 48px; color: var(--muted); }
     .error-msg {
       background: var(--red-light);
@@ -381,7 +381,8 @@
 <script type="module">
 import { memberColor, initial, esc, hubConfirm, hubAlert, searchMatch,
          createShareHelper, createDbHelper, sendHubNotification,
-         activeShareLinks, SHARE_EXPIRY_CHOICES, DEFAULT_SHARE_EXPIRY_HOURS } from "/hub-sdk.js";
+         activeShareLinks, SHARE_EXPIRY_CHOICES, DEFAULT_SHARE_EXPIRY_HOURS,
+         glyph, chickadee } from "/hub-sdk.js";
 import { canSeeMember, canSeeItem, priorityLabel, sortItems, searchableFields,
          canShare, changedARow } from "./logic.js";
 import { createShareUi } from "./share.js";
@@ -677,9 +678,9 @@ function openItemModal(item = null) {
     <div class="form-group">
       <label>Who can see this</label>
       <div class="vis-pills" id="f-vis-pills">
-        <button type="button" class="vis-pill ${vis === "everyone" ? "active" : ""}" data-vis="everyone" onclick="setItemVis('everyone')">🌍 Everyone</button>
-        <button type="button" class="vis-pill ${vis === "adults"   ? "active" : ""}" data-vis="adults"   onclick="setItemVis('adults')">🔒 Adults only</button>
-        <button type="button" class="vis-pill ${vis === "private"  ? "active" : ""}" data-vis="private"  onclick="setItemVis('private')">🙈 Only me</button>
+        <button type="button" class="vis-pill ${vis === "everyone" ? "active" : ""}" data-vis="everyone" onclick="setItemVis('everyone')">${glyph("people", { accent: "currentColor" })} Everyone</button>
+        <button type="button" class="vis-pill ${vis === "adults"   ? "active" : ""}" data-vis="adults"   onclick="setItemVis('adults')">${glyph("lock", { accent: "currentColor" })} Adults only</button>
+        <button type="button" class="vis-pill ${vis === "private"  ? "active" : ""}" data-vis="private"  onclick="setItemVis('private')">${glyph("shield", { accent: "currentColor" })} Only me</button>
       </div>
       <input type="hidden" id="f-visibility" value="${vis}" />
     </div>
@@ -829,14 +830,14 @@ function renderItemRow(item, isOwner) {
           ${priorityBadgeHtml(item.priority)}
           ${isOwner ? visibilityBadgeHtml(item.visibility) : ""}
           <span class="item-name">${esc(item.name)}</span>
-          ${hasUrl ? `<a href="${esc(item.url)}" target="_blank" rel="noopener" class="item-link" title="Open link">🔗</a>` : ""}
+          ${hasUrl ? `<a href="${esc(item.url)}" target="_blank" rel="noopener" class="item-link" title="Open link" aria-label="Open link">${glyph("link")}</a>` : ""}
         </div>
         ${item.description ? `<div class="item-desc">${esc(item.description)}</div>` : ""}
       </div>
       ${isOwner ? `
         <div class="item-actions">
-          <button class="btn-icon-sm" data-action="edit-item" data-id="${esc(item.id)}" title="Edit">✏️</button>
-          <button class="btn-icon-sm danger" data-action="delete-item" data-id="${esc(item.id)}" title="Remove">🗑</button>
+          <button class="btn-icon-sm" data-action="edit-item" data-id="${esc(item.id)}" title="Edit" aria-label="Edit">${glyph("pencil")}</button>
+          <button class="btn-icon-sm danger" data-action="delete-item" data-id="${esc(item.id)}" title="Remove" aria-label="Remove">${glyph("trash")}</button>
         </div>
       ` : ""}
     </div>
@@ -855,7 +856,7 @@ function renderMyList() {
   return `
     <div class="page-header">
       <div>
-        <h1>🎁 Wish List</h1>
+        <h1>${glyph("gift")} Wish List</h1>
         ${me ? `<div class="who">${esc(me.name)}</div>` : ""}
       </div>
       <div class="header-actions">
@@ -872,9 +873,9 @@ function renderMyList() {
     ${myItems.length ? `<div class="search-row"><input id="search" class="search-input" type="search" placeholder="Search your list…" aria-label="Search your list" value="${esc(searchQ)}" /></div>` : ""}
     ${sorted.length === 0
       ? (searchQ
-        ? `<div class="empty"><div class="empty-icon">🔍</div><p>Nothing matches "${esc(searchQ)}".</p></div>`
+        ? `<div class="empty"><div class="empty-icon">${chickadee("searching")}</div><p>Nothing matches "${esc(searchQ)}".</p></div>`
         : `<div class="empty">
-           <div class="empty-icon">🎁</div>
+           <div class="empty-icon">${chickadee("nest")}</div>
            <p>Your wish list is empty.</p>
            <p style="margin-top:6px;font-size:0.85rem">Add items to let your family know what you'd love!</p>
          </div>`)
@@ -890,7 +891,7 @@ function renderBrowse() {
   return `
     <div class="page-header">
       <div>
-        <h1>🎁 Wish List</h1>
+        <h1>${glyph("gift")} Wish List</h1>
         ${me ? `<div class="who">${esc(me.name)}</div>` : ""}
       </div>
     </div>
@@ -902,7 +903,7 @@ function renderBrowse() {
 
     ${visible.length === 0
       ? `<div class="empty">
-           <div class="empty-icon">👥</div>
+           <div class="empty-icon">${chickadee("nest")}</div>
            <p>No family lists to browse yet.</p>
            <p style="margin-top:6px;font-size:0.85rem">Family members will appear here once they add items to their list.</p>
          </div>`
@@ -946,9 +947,9 @@ function renderBrowseList() {
     ${browseItems.length ? `<div class="search-row"><input id="search" class="search-input" type="search" placeholder="Search this list…" aria-label="Search this list" value="${esc(searchQ)}" /></div>` : ""}
     ${sorted.length === 0
       ? (searchQ
-        ? `<div class="empty" style="padding:24px 0"><div class="empty-icon" style="font-size:2rem">🔍</div><p>Nothing matches "${esc(searchQ)}".</p></div>`
+        ? `<div class="empty" style="padding:24px 0"><div class="empty-icon">${chickadee("searching", { size: 72 })}</div><p>Nothing matches "${esc(searchQ)}".</p></div>`
         : `<div class="empty" style="padding:24px 0">
-           <div class="empty-icon" style="font-size:2rem">🎁</div>
+           <div class="empty-icon">${chickadee("nest", { size: 72 })}</div>
            <p>${esc(member?.name ?? "They")}'s list is empty.</p>
          </div>`)
       : `<div class="items-list">${sorted.map(i => renderItemRow(i, false)).join("")}</div>`
