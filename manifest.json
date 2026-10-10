@@ -21,6 +21,10 @@
   "preload": {
     "wish_items": {
       "sql": "SELECT DISTINCT member_id FROM app_wishlist__wish_items"
+    },
+    "my_items": {
+      "sql": "SELECT id, member_id, name, description, url, priority, visibility, created_at FROM app_wishlist__wish_items WHERE member_id = ? ORDER BY created_at DESC",
+      "params": [":me"]
     }
   },
   "automation_actions": {

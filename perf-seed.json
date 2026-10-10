@@ -1,0 +1,346 @@
+{
+ "seed": [
+  {
+   "sql": "INSERT INTO app_wishlist__lists (member_id, title, created_at, updated_at) VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-20 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-20 days'))",
+   "params": [
+    "{{me}}",
+    "Birthday wish list"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 days'))",
+   "params": [
+    "wsh-1",
+    "{{me}}",
+    "Noise cancelling headphones",
+    "Over ear, in black.",
+    "https://shop.example/headphones",
+    "high",
+    "everyone"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-29 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-29 days'))",
+   "params": [
+    "wsh-2",
+    "{{me}}",
+    "Cast iron dutch oven",
+    "Five quart, any color but red.",
+    "medium",
+    "everyone"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-28 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-28 days'))",
+   "params": [
+    "wsh-3",
+    "{{me}}",
+    "Trail running shoes",
+    "Size 10, wide.",
+    "https://shop.example/trail-shoes",
+    "high",
+    "everyone"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-27 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-27 days'))",
+   "params": [
+    "wsh-4",
+    "{{me}}",
+    "Atomic Habits",
+    "Paperback is fine.",
+    "low",
+    "everyone"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, url, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-26 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-26 days'))",
+   "params": [
+    "wsh-5",
+    "{{me}}",
+    "Standing desk mat",
+    "https://shop.example/desk-mat",
+    "low",
+    "adults"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-25 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-25 days'))",
+   "params": [
+    "wsh-6",
+    "{{me}}",
+    "Espresso grinder",
+    "Burr grinder, not blade.",
+    "https://shop.example/grinder",
+    "medium",
+    "everyone"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-24 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-24 days'))",
+   "params": [
+    "wsh-7",
+    "{{me}}",
+    "Wool hiking socks",
+    "Three pairs, medium cushion.",
+    "low",
+    "everyone"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, url, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-23 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-23 days'))",
+   "params": [
+    "wsh-8",
+    "{{me}}",
+    "National parks pass",
+    "https://shop.example/parks-pass",
+    "high",
+    "everyone"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-22 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-22 days'))",
+   "params": [
+    "wsh-9",
+    "{{me}}",
+    "Watercolor set",
+    "The travel tin with twelve pans.",
+    "medium",
+    "everyone"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, url, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-21 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-21 days'))",
+   "params": [
+    "wsh-10",
+    "{{me}}",
+    "Bike repair stand",
+    "https://shop.example/repair-stand",
+    "medium",
+    "adults"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-20 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-20 days'))",
+   "params": [
+    "wsh-11",
+    "{{me}}",
+    "Weekend cooking class",
+    "The pasta one downtown.",
+    "medium",
+    "everyone"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-19 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-19 days'))",
+   "params": [
+    "wsh-12",
+    "{{me}}",
+    "Insulated water bottle",
+    "32 ounce, wide mouth.",
+    "low",
+    "everyone"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-18 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-18 days'))",
+   "params": [
+    "wsh-13",
+    "{{me}}",
+    "Garden kneeler",
+    "low",
+    "everyone"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-17 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-17 days'))",
+   "params": [
+    "wsh-14",
+    "{{me}}",
+    "Surprise party supplies",
+    "For Dana's birthday, keep it quiet.",
+    "high",
+    "private"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-16 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-16 days'))",
+   "params": [
+    "wsh-15",
+    "{{me}}",
+    "Portable speaker",
+    "Waterproof, for the lake.",
+    "https://shop.example/speaker",
+    "medium",
+    "everyone"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-15 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-15 days'))",
+   "params": [
+    "wsh-16",
+    "{{me}}",
+    "Chef's knife",
+    "Eight inch.",
+    "https://shop.example/chef-knife",
+    "high",
+    "everyone"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-14 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-14 days'))",
+   "params": [
+    "wsh-17",
+    "{{me}}",
+    "Board game: Wingspan",
+    "medium",
+    "everyone"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-13 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-13 days'))",
+   "params": [
+    "wsh-18",
+    "{{me}}",
+    "Flannel sheets",
+    "Queen size.",
+    "low",
+    "everyone"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-12 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-12 days'))",
+   "params": [
+    "wsh-19",
+    "{{me}}",
+    "Camping hammock",
+    "With tree straps.",
+    "https://shop.example/hammock",
+    "medium",
+    "everyone"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-11 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-11 days'))",
+   "params": [
+    "wsh-20",
+    "{{me}}",
+    "Reading lamp",
+    "Warm light, clamps to the headboard.",
+    "low",
+    "everyone"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, url, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-10 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-10 days'))",
+   "params": [
+    "wsh-21",
+    "{{me}}",
+    "Record player needle",
+    "https://shop.example/stylus",
+    "low",
+    "adults"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-9 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-9 days'))",
+   "params": [
+    "wsh-22",
+    "{{me}}",
+    "Sourdough starter kit",
+    "low",
+    "everyone"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-8 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-8 days'))",
+   "params": [
+    "wsh-23",
+    "{{me}}",
+    "Day pack",
+    "20 liter with a hip belt.",
+    "https://shop.example/day-pack",
+    "medium",
+    "everyone"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-7 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-7 days'))",
+   "params": [
+    "wsh-24",
+    "{{me}}",
+    "Anniversary gift idea",
+    "Weekend at the inn by the coast.",
+    "high",
+    "private"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-6 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-6 days'))",
+   "params": [
+    "wsh-25",
+    "{{me}}",
+    "Bird feeder",
+    "Squirrel proof if possible.",
+    "low",
+    "everyone"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-5 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-5 days'))",
+   "params": [
+    "wsh-26",
+    "{{me}}",
+    "Leather notebook",
+    "Dotted pages, A5.",
+    "low",
+    "everyone"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-4 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-4 days'))",
+   "params": [
+    "wsh-27",
+    "{{me}}",
+    "Tool roll",
+    "For the bike bag.",
+    "https://shop.example/tool-roll",
+    "low",
+    "everyone"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-3 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-3 days'))",
+   "params": [
+    "wsh-28",
+    "{{me}}",
+    "Concert tickets",
+    "Any Saturday show this fall.",
+    "high",
+    "everyone"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-2 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-2 days'))",
+   "params": [
+    "wsh-29",
+    "{{me}}",
+    "Slippers",
+    "Size 10, sheepskin lined.",
+    "medium",
+    "everyone"
+   ]
+  },
+  {
+   "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-1 days'), strftime('%Y-%m-%dT%H:%M:%fZ','now','-1 days'))",
+   "params": [
+    "wsh-30",
+    "{{me}}",
+    "Puzzle, 1000 pieces",
+    "Landscapes over cartoons.",
+    "low",
+    "everyone"
+   ]
+  }
+ ]
+}
