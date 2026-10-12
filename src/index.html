@@ -355,6 +355,8 @@
       font-size: 0.9rem;
     }
     .empty-icon { margin-bottom: 10px; }
+    .load-error { margin: 0 0 12px; padding: 10px 14px; border-radius: 10px; background: var(--hub-tint-danger, #fee2e2); color: var(--hub-tint-danger-fg, #b91c1c); font-size: 0.9rem; display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+    .load-error-retry { background: none; border: 1px solid currentColor; border-radius: 8px; padding: 5px 10px; font: inherit; font-weight: 600; color: inherit; cursor: pointer; flex-shrink: 0; }
     .loading { text-align: center; padding: 48px; color: var(--muted); }
     .error-msg {
       background: var(--red-light);
@@ -423,6 +425,7 @@ let myItems      = [];
 let allWishlists = {};  // { [memberId]: true } — members who have at least one item
 let browseTarget = null;
 let browseItems  = [];
+let browseFailed = false; // the browse target's list could not be read: unknown, not empty
 let editingItemId = null;
 
 // ─── DB helper ────────────────────────────────────────────────────────────────
@@ -455,10 +458,13 @@ async function loadMembers() {
     ];
     return;
   }
-  try {
-    const res = await fetch(`${CONTEXT}?keys=family.members`);
-    members = ((await res.json())["family.members"]) ?? [];
-  } catch { members = []; }
+  // A failed read throws: firstLoad shows the load banner, not a household with nobody in it.
+  const res = await fetch(`${CONTEXT}?keys=family.members`);
+  const data = await res.json().catch(() => null);
+  if (!res.ok || !data || typeof data !== "object" || data.error) throw new Error("Couldn’t reach the hub. Try again.");
+  // The hub answers 200 and names a key it could not resolve in `$errors`.
+  if (Array.isArray(data.$errors) && data.$errors.includes("family.members")) throw new Error("context: family.members did not resolve");
+  members = data["family.members"] ?? [];
 }
 
 async function loadMyData() {
@@ -481,7 +487,9 @@ async function loadMyData() {
   // page working beats no page at all. The share modal does NOT read these —
   // it queries for itself, because an empty list there is a promise about what
   // a public link exposes rather than a display.
-  const empty = () => ({ rows: [] });
+  // The caller is still told, so an unread list is not passed off as an empty one.
+  let unread = false;
+  const empty = () => { unread = true; return { rows: [] }; };
   const [wlRes, itemRes] = await Promise.all([
     db("SELECT DISTINCT member_id FROM app_wishlist__wish_items").catch(empty),
     meId
@@ -497,6 +505,7 @@ async function loadMyData() {
     allWishlists[row.member_id] = {};
   }
   myItems = itemRes.rows ?? [];
+  return !unread;
 }
 
 /**
@@ -542,16 +551,18 @@ let browseSeq = 0;
 async function loadBrowseItems(memberId) {
   const seq = ++browseSeq;
   let rows = [];
+  let failed = false;
   try {
     rows = await fetchItemsFor(memberId);
   } catch {
-    // The browse view has always shown an empty list when a read fails, and an
-    // empty list there is a display, not a promise. The share modal is the one
-    // caller that cannot treat the two as the same, so it takes the throw.
+    // The browse view keeps working when a read fails, but says the list could
+    // not be read instead of calling it empty. The share modal takes the throw.
     rows = [];
+    failed = true;
   }
   if (seq !== browseSeq) return;
   browseItems = rows;
+  browseFailed = failed;
 }
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
@@ -781,6 +792,7 @@ window.setTab = async function(t) {
     if (visible.length > 0) {
       browseTarget = visible[0].id;
       browseItems = [];
+      browseFailed = false;
       render();
       await loadBrowseItems(browseTarget);
     }
@@ -791,6 +803,7 @@ window.setTab = async function(t) {
 window.selectBrowseMember = async function(memberId) {
   browseTarget = memberId;
   browseItems = [];
+  browseFailed = false;
   render();
   await loadBrowseItems(memberId);
   render();
@@ -849,6 +862,15 @@ function matchingItems(items) {
   return searchQ ? items.filter(i => searchMatch(searchQ, searchableFields(i))) : items;
 }
 
+// True from a failed first load until a load succeeds. While it is, neither
+// view states that a list is empty.
+let loadFailed = false;
+function loadErrorHtml() {
+  return loadFailed
+    ? `<div class="load-error" data-testid="load-error" role="alert"><span>Couldn’t load wish lists.</span> <button type="button" class="load-error-retry" data-testid="load-retry">Try again</button></div>`
+    : "";
+}
+
 function renderMyList() {
   const me = effectiveMe();
   const sorted = matchingItems(sortItems(myItems));
@@ -870,9 +892,10 @@ function renderMyList() {
       <button class="tab" onclick="setTab('browse')">Browse Family</button>
     </div>
 
+    ${loadErrorHtml()}
     ${myItems.length ? `<div class="search-row"><input id="search" class="search-input" type="search" placeholder="Search your list…" aria-label="Search your list" value="${esc(searchQ)}" /></div>` : ""}
     ${sorted.length === 0
-      ? (searchQ
+      ? (loadFailed && !myItems.length ? "" : searchQ
         ? `<div class="empty"><div class="empty-icon">${chickadee("searching")}</div><p>Nothing matches "${esc(searchQ)}".</p></div>`
         : `<div class="empty">
            <div class="empty-icon">${chickadee("nest")}</div>
@@ -901,8 +924,9 @@ function renderBrowse() {
       <button class="tab active" onclick="setTab('browse')">Browse Family</button>
     </div>
 
+    ${loadErrorHtml()}
     ${visible.length === 0
-      ? `<div class="empty">
+      ? loadFailed ? "" : `<div class="empty">
            <div class="empty-icon">${chickadee("nest")}</div>
            <p>No family lists to browse yet.</p>
            <p style="margin-top:6px;font-size:0.85rem">Family members will appear here once they add items to their list.</p>
@@ -940,12 +964,14 @@ function renderBrowseList() {
     <div class="browse-header">
       <span class="avatar-sm" style="background:${color}">${initial(member?.name ?? "?")}</span>
       <span class="browse-name">${esc(member?.name ?? "")}'s Wish List</span>
-      <span class="browse-count">${sorted.length} item${sorted.length !== 1 ? "s" : ""}</span>
+      ${browseFailed ? "" : `<span class="browse-count">${sorted.length} item${sorted.length !== 1 ? "s" : ""}</span>`}
       ${canShare(share.enabled, ME, member) ? `<button class="btn btn-ghost btn-sm" data-action="share" data-id="${esc(browseTarget)}">Share</button>` : ""}
     </div>
 
     ${browseItems.length ? `<div class="search-row"><input id="search" class="search-input" type="search" placeholder="Search this list…" aria-label="Search this list" value="${esc(searchQ)}" /></div>` : ""}
-    ${sorted.length === 0
+    ${browseFailed
+      ? `<div class="empty" style="padding:24px 0" data-testid="browse-error"><p>Couldn’t load ${esc(member?.name ?? "their")}${member?.name ? "’s" : ""} list.</p></div>`
+      : sorted.length === 0
       ? (searchQ
         ? `<div class="empty" style="padding:24px 0"><div class="empty-icon">${chickadee("searching", { size: 72 })}</div><p>Nothing matches "${esc(searchQ)}".</p></div>`
         : `<div class="empty" style="padding:24px 0">
@@ -988,9 +1014,9 @@ function setupDelegation() {
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
-(async () => {
-  setupDelegation();
-  await Promise.all([loadMembers(), loadMyData()]);
+async function firstLoad() {
+  const [gotMembers, loaded] = await Promise.all([loadMembers().then(() => true, () => false), loadMyData()]);
+  loadFailed = loaded === false || !gotMembers;
   render();
 
   // Pre-load the first visible member's items in the background
@@ -999,7 +1025,13 @@ function setupDelegation() {
     browseTarget = visible[0].id;
     loadBrowseItems(browseTarget).then(render).catch(() => {});
   }
-})();
+}
+
+setupDelegation();
+document.addEventListener("click", (e) => {
+  if (e.target.closest('[data-testid="load-retry"]')) firstLoad();
+});
+firstLoad();
 </script>
 </body>
 </html>
