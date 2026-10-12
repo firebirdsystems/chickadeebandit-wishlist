@@ -278,15 +278,17 @@ describe("creating a link", () => {
     await vi.waitFor(() => expect(h.find(".share-error")).not.toBeNull());
 
     expect(h.share.create).not.toHaveBeenCalled();
-    expect(h.text()).toContain("Failed to fetch");
+    expect(h.text()).toContain("Couldn\u2019t create the link — try again.");
+    expect(h.text()).not.toContain("Failed to fetch");
   });
 
-  it("surfaces a refusal from the hub verbatim", async () => {
+  it("reports a refused anchor write in the modal's words, not the hub's", async () => {
     const h = harness({ dbError: "Table \"lists\" may only be modified by adults" });
     await h.ui.open("kid-1");
 
     h.find('[data-share-action="create"]').click();
-    await vi.waitFor(() => expect(h.text()).toContain("may only be modified by adults"));
+    await vi.waitFor(() => expect(h.text()).toContain("Couldn\u2019t create the link — try again."));
+    expect(h.text()).not.toContain("may only be modified by adults");
     expect(h.share.create).not.toHaveBeenCalled();
   });
 
@@ -296,7 +298,9 @@ describe("creating a link", () => {
     await h.ui.open("kid-1");
 
     h.find('[data-share-action="create"]').click();
-    await vi.waitFor(() => expect(h.text()).toContain("External sharing is disabled"));
+    // The hub's text is not shown: a failed mint reads in the modal's words.
+    await vi.waitFor(() => expect(h.text()).toContain("Couldn\u2019t create the link — try again."));
+    expect(h.text()).not.toContain("External sharing is disabled");
     expect(h.find('[data-share-action="create"]').disabled).toBe(false);
   });
 
@@ -382,7 +386,8 @@ describe("error banner", () => {
     await h.ui.open("kid-1");
 
     h.find('[data-share-action="revoke"]').click();
-    await vi.waitFor(() => expect(h.text()).toContain("Share link not found"));
+    await vi.waitFor(() => expect(h.text()).toContain("Couldn\u2019t revoke the link — try again."));
+    expect(h.text()).not.toContain("Share link not found");
 
     h.find('[data-share-action="revoke"]').click();
     await vi.waitFor(() => expect(h.find(".share-error")).toBeNull());

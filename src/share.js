@@ -21,6 +21,15 @@ import { wishListTitle, shareableItemCount, shareTargetOf } from "./logic.js";
  *  should not need ten edits. Injected rather than imported so this module
  *  stays testable in Node without the browser-only /hub-sdk.js URL. */
 
+/** What a failed mint or revoke says. The share helper and `db` throw with the
+ *  hub's own text, which under an outage is not wording for a member, so it is
+ *  shown only when the error is marked as written for the reader (`forUser`).
+ *  Anything else gets the caller's fixed line, and the real error goes to the
+ *  console. */
+function failText(err, line) {
+  return err?.forUser && err.message ? err.message : line;
+}
+
 /**
  * @param deps.share        createShareHelper(...) from the hub SDK
  * @param deps.db           the hub SDK database helper — THROWS on a refusal
@@ -345,7 +354,8 @@ export function createShareUi(deps) {
       }
     } catch (err) {
       if (!still()) return;
-      error = err?.message ?? "Couldn't create the link.";
+      console.error("share: create failed", err);
+      error = failText(err, "Couldn\u2019t create the link — try again.");
     } finally {
       // One teardown for both outcomes: the button must come back whether the
       // mint succeeded or failed, and the two branches were drifting apart.
@@ -391,7 +401,8 @@ export function createShareUi(deps) {
       error = "";
     } catch (err) {
       if (!same()) return;
-      error = err?.message ?? "Couldn't revoke the link.";
+      console.error("share: revoke failed", err);
+      error = failText(err, "Couldn\u2019t revoke the link — try again.");
     }
     render();
   }
