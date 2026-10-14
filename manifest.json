@@ -135,9 +135,6 @@
   "nav": {
     "label": "Wish List"
   },
-  "resource_limits": {
-    "max_db_bytes": 10485760
-  },
   "shareable": {
     "list": {
       "table": "lists",
