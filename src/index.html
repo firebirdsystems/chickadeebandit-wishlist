@@ -386,7 +386,7 @@ import { memberColor, initial, esc, hubConfirm, hubAlert, searchMatch,
          activeShareLinks, SHARE_EXPIRY_CHOICES, DEFAULT_SHARE_EXPIRY_HOURS,
          glyph, chickadee } from "/hub-sdk.js";
 import { canSeeMember, canSeeItem, priorityLabel, sortItems, searchableFields,
-         canShare, changedARow } from "./logic.js";
+         canShare, changedARow, failureLine } from "./logic.js";
 import { createShareUi } from "./share.js";
 import { createModal } from "./modal.js";
 
@@ -444,7 +444,8 @@ let editingItemId = null;
  */
 const db = createDbHelper(DB);
 
-/** What a write that touched no rows means for an edit of one specific item. */
+/** What a write that touched no rows means for an edit of one specific item:
+ *  the page's own line for it, shown as written (`forUser`, see failureLine). */
 const ITEM_GONE = "That item is no longer on your list — it may have been removed on another device.";
 
 // ─── Load ─────────────────────────────────────────────────────────────────────
@@ -588,7 +589,7 @@ async function saveItem(data) {
         // edits a row that is not there and fails identically, with no way out
         // but a reload.
         myItems = myItems.filter(i => i.id !== editingId);
-        throw new Error(ITEM_GONE);
+        throw Object.assign(new Error(ITEM_GONE), { forUser: true });
       }
     }
     myItems = myItems.map(i =>
@@ -731,6 +732,7 @@ window.submitItem = async function() {
   const btn = modal.current()?.querySelector(".btn-primary");
   const submittedFrom = modal.current();
   const originalLabel = editingItemId ? "Save" : "Add to List";
+  const words = { action: editingItemId ? "save the item" : "add the item", thing: "item" };
   if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
 
   try {
@@ -746,11 +748,12 @@ window.submitItem = async function() {
     if (modal.current() === submittedFrom) closeModal();
     render();
   } catch (err) {
-    // Show what actually went wrong. The hub's own refusals carry the useful
-    // text (row policy, quota), and so does the "this row is gone" case — all
-    // of which a fixed "Something went wrong" was throwing away, leaving the
-    // member to guess and the distinction untestable.
-    const message = err?.message || "Something went wrong. Please try again.";
+    // Say what went wrong, in the page's words, never the hub's: an edit whose
+    // item is gone has its own line (ITEM_GONE), a row-policy refusal (403) and
+    // a full household (507) theirs, and only a failure that may pass next time
+    // says "try again" (failureLine). The hub's text goes to the console.
+    console.error(err);
+    const message = failureLine(err, words);
     // ...but only into the form it was submitted from. `errEl` and `btn` were
     // captured before the await, and if the member has since opened something
     // else those nodes are detached — writing there reports the failure to
@@ -774,10 +777,11 @@ window.deleteItem = async function(id) {
       // No zero-row check: a delete that matched nothing has achieved what the
       // member asked for, and complaining about it would be noise.
       await db("DELETE FROM app_wishlist__wish_items WHERE id = ? AND member_id = ?", [id, ME.id]);
-    } catch {
+    } catch (e) {
       // Dropping it locally would hide the item until the next load and then
       // bring it back, with nothing said in between.
-      await hubAlert("Couldn\u2019t remove that item. Please try again.");
+      console.error(e);
+      await hubAlert(failureLine(e, { action: "remove the item", thing: "item" }));
       return;
     }
   }

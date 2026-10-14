@@ -67,13 +67,15 @@ beforeEach(() => {
   globalThis.__hubAlerts = [];
 });
 
-/** Boot with a database configured, answering every statement from `reply`. */
-async function bootWithDb(reply) {
+/** Boot with a database configured, answering every statement from `reply`
+ *  with the HTTP status `statusOf` gives it (200 unless said). */
+async function bootWithDb(reply, statusOf = () => 200) {
   window.__DB_URL = "/api/db";
   window.__CURRENT_MEMBER = { id: "adult-1", name: "Alex", role: "adult", isAdmin: false };
   globalThis.fetch = async (_url, init) => {
     const { sql } = JSON.parse(init.body);
-    return { ok: true, status: 200, json: async () => reply(sql) };
+    const status = statusOf(sql);
+    return { ok: status < 400, status, json: async () => reply(sql) };
   };
   await boot();
   await new Promise((r) => setTimeout(r, 0));
@@ -122,7 +124,8 @@ describe("saving an item through the page", () => {
   // reports the failure to nobody.
   it("does not report a failure into a modal that has been replaced", async () => {
     await bootWithDb((sql) =>
-      sql.startsWith("SELECT") ? { rows: [ITEM] } : { error: "Over the storage quota" });
+      sql.startsWith("SELECT") ? { rows: [ITEM] } : { error: "Over the storage quota" },
+      (sql) => (sql.startsWith("SELECT") ? 200 : 507));
 
     window.editItem("x1");
     const submitting = window.submitItem();
@@ -134,7 +137,7 @@ describe("saving an item through the page", () => {
     expect(document.querySelector(".modal-backdrop").textContent).toContain("Add to Wish List");
     // ...and the failure was still reported somewhere the member can see it,
     // rather than written into the detached node the submit had captured.
-    expect(globalThis.__hubAlerts.join(" ")).toContain("Over the storage quota");
+    expect(globalThis.__hubAlerts.join(" ")).toContain("The household’s storage is full — free up space first.");
   });
 
   it("closes the editor when the edit really saved", async () => {
@@ -149,15 +152,25 @@ describe("saving an item through the page", () => {
     expect(document.getElementById("root").textContent).toContain("Trainers, blue");
   });
 
-  // The hub's refusals carry the text worth showing.
-  it("surfaces the hub's own refusal verbatim", async () => {
-    await bootWithDb((sql) =>
-      sql.startsWith("SELECT") ? { rows: [ITEM] } : { error: "Over the storage quota" });
+  // A refusal is named in the page's words, from its status; the hub's text
+  // never reaches the screen, and only a failure that may pass says "try again".
+  for (const [status, line] of [
+    [507, "The household’s storage is full — free up space first."],
+    [403, "You don’t have permission to save the item."],
+    [503, "Couldn’t save the item — try again."],
+  ]) {
+    it(`names a ${status} in the page's words, not the hub's`, async () => {
+      await bootWithDb((sql) =>
+        sql.startsWith("SELECT") ? { rows: [ITEM] } : { error: "Over the storage quota" },
+        (sql) => (sql.startsWith("SELECT") ? 200 : status));
 
-    window.editItem("x1");
-    await window.submitItem();
-    expect(document.getElementById("f-error").textContent).toContain("Over the storage quota");
-  });
+      window.editItem("x1");
+      await window.submitItem();
+      const text = document.getElementById("f-error").textContent;
+      expect(text).toBe(line);
+      expect(text).not.toContain("Over the storage quota");
+    });
+  }
 });
 
 describe("the page boots", () => {

@@ -152,3 +152,23 @@ export function shareTargetOf(modalEl) {
 export function changedARow(res) {
   return res?.changed !== 0;
 }
+
+/**
+ * The line a failed write shows ("Refused, gone, or failed" in the app-template guide):
+ * "try again" only when retrying can work. `thing` and `action` are the app's own nouns
+ * ("item", "save the item"). `found` is the caller's re-read after a write that changed
+ * nothing (or a 404/409): false = the row is gone, true = it is still there and the hub
+ * narrowed the write away from this member. A `forUser` error keeps the message the page
+ * wrote for it (an edit whose item is gone has its own). Never shows hub text.
+ */
+export function failureLine(e, { action, thing, found } = {}) {
+  if (e?.forUser) return e.message;
+  if (e?.code === "UNIQUE_CONSTRAINT" || /UNIQUE constraint failed/i.test(String(e?.message ?? ""))) return `That ${thing} already exists.`;
+  if (e?.status === 403) return `You don’t have permission to ${action}.`;
+  if (e?.status === 507) return "The household’s storage is full — free up space first.";
+  if (found === false || (found === undefined && e?.status === 404)) return `This ${thing} has been removed.`;
+  if (found === true) return `You don’t have permission to ${action}.`;
+  if (e?.status === 409 || e?.status === 404) return `This ${thing} was changed by someone else — check it first.`;
+  if (e?.status === 429) return "Too many tries — wait a minute and try again.";
+  return `Couldn’t ${action} — try again.`;
+}

@@ -25,7 +25,12 @@ export function createDbHelper(dbUrl) {
       body: JSON.stringify({ sql, params }),
     });
     const json = await res.json();
-    if (!res.ok || json.error) throw new Error(json.error || `Database request failed (${res.status})`);
+    // Like the real helper, the Error carries the response `status` and the
+    // body's `code`: the page picks its line from those, never from the text.
+    if (!res.ok || json.error) {
+      throw Object.assign(new Error(json.error || `Database request failed (${res.status})`),
+        { status: res.status }, typeof json?.code === "string" ? { code: json.code } : null);
+    }
     return json;
   }
   dbq.batch = async () => [];
