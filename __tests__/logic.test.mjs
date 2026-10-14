@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { canSeeMember, canSeeItem, priorityOrder, sortItems, priorityLabel, searchableFields,
-         wishListTitle, shareableItemCount, canShare, shareTargetOf, changedARow } from "../src/logic.js";
+         wishListTitle, shareableItemCount, canShare, changedARow } from "../src/logic.js";
 
 const members = [
   { id: "adult-1", name: "Alex",   role: "adult" },
@@ -213,36 +213,6 @@ describe("canShare", () => {
     expect(canShare(false, adult, adult)).toBe(false);
   });
 });
-
-describe("shareTargetOf", () => {
-  const shareModal = (target) => ({ dataset: { modal: "share", ...(target ? { shareTarget: target } : {}) } });
-
-  it("reads the target off the share modal", () => {
-    expect(shareTargetOf(shareModal("emma"))).toBe("emma");
-  });
-
-  // The regression this exists for: the target used to live in module state,
-  // and openModal's teardown cleared it while the share modal was being built
-  // — so the modal opened with no target, rendered no links, and sent a null
-  // member_id to an insert whose column is NOT NULL.
-  it("is null when no modal is open", () => {
-    expect(shareTargetOf(null)).toBeNull();
-    expect(shareTargetOf(undefined)).toBeNull();
-  });
-
-  // A late re-render must not paint share markup into the item form.
-  it("is null once a different modal has taken over", () => {
-    expect(shareTargetOf({ dataset: { modal: "", shareTarget: "emma" } })).toBeNull();
-    expect(shareTargetOf({ dataset: {} })).toBeNull();
-  });
-
-  it("is null for a share modal that never received a target", () => {
-    expect(shareTargetOf(shareModal(null))).toBeNull();
-    expect(shareTargetOf({ dataset: { modal: "share", shareTarget: "" } })).toBeNull();
-  });
-});
-
-
 
 describe("changedARow", () => {
   it("accepts a write that touched its row", () => {

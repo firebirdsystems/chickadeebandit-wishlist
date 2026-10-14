@@ -117,26 +117,6 @@ export function canShare(shareEnabled, me, subject) {
 }
 
 /**
- * Whose list a modal element is the share modal for, or null.
- *
- * The target is read back off the element that carries it rather than held in
- * app state, because `openModal` tears down whatever was open before building
- * the next one — so anything kept beside it is state that teardown can clear
- * out from under the modal being opened. That is not hypothetical: clearing the
- * target in `closeModal` once left the share modal opening with no target at
- * all, which rendered no links and sent a null member_id to the anchor insert.
- *
- * Taking the modal's own word for it also answers the other direction: once a
- * different modal has replaced this one, a late re-render finds nothing to do.
- */
-export function shareTargetOf(modalEl) {
-  if (modalEl?.dataset?.modal !== "share") return null;
-  return modalEl.dataset.shareTarget || null;
-}
-
-
-
-/**
  * Whether a write that RAN actually touched a row.
  *
  * The SDK's db helper throws when a statement is REFUSED, which covers row

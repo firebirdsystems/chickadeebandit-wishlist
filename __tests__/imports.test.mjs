@@ -61,17 +61,18 @@ describe.each([
  *
  * __tests__/share-ui.test.mjs covers the behaviour; this covers the reason.
  */
-describe("share modal state is bound to the modal", () => {
+describe("share state is not the modal's", () => {
   it("tears the modal down without touching share state", () => {
     const close = modalSrc.match(/function close\(\)\s*\{[\s\S]*?\n {2}\}/)?.[0] ?? "";
     expect(close, "close() should be findable").not.toBe("");
     expect(close, "close() must only drop the element").not.toMatch(/share/i);
   });
 
-  it("reads the share target off the element rather than holding it", () => {
-    expect(shareSrc).toMatch(/const target = \(\) => shareTargetOf\(/);
-    // A mutable module-level target is the shape that broke; a const arrow is not.
-    expect(shareSrc).not.toMatch(/^\s*let\s+(share)?[Tt]arget\b/m);
+  // The panel is the hub's now, in its own overlay: the page's modal slot no
+  // longer carries share state at all, and no copy of the panel lives here.
+  it("takes the panel from the hub and keeps only the wish-list half", () => {
+    expect(importsFrom(html, "/hub-share-ui.js")).toEqual(new Set(["createShareUi", "createOverlayView"]));
+    expect(shareSrc).not.toMatch(/function (refresh|revoke|copy)\(/);
     expect(html).not.toMatch(/^\s*let\s+shareTarget\b/m);
   });
 });

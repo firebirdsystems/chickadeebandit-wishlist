@@ -294,51 +294,7 @@
     .btn-danger { background: transparent; color: var(--red); border: 1.5px solid var(--red-light); }
     .btn-danger:hover:not(:disabled) { border-color: var(--red); }
 
-    .share-intro { font-size: 0.85rem; color: var(--muted); margin-bottom: 10px; }
-    .share-scope {
-      font-size: 0.85rem;
-      background: var(--bg);
-      border-radius: var(--radius);
-      padding: 8px 10px;
-      margin-bottom: 12px;
-    }
-    .share-error {
-      font-size: 0.85rem;
-      color: var(--red);
-      background: var(--red-light);
-      border-radius: var(--radius);
-      padding: 8px 10px;
-      margin-bottom: 12px;
-    }
-    .share-empty { font-size: 0.85rem; color: var(--muted); padding: 8px 0; }
-    .share-row { padding: 10px 0; border-bottom: 1px solid var(--border); }
-    .share-url {
-      width: 100%;
-      font-size: 0.8rem;
-      padding: 6px 8px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: var(--bg);
-      color: var(--text);
-    }
-    .share-meta { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
-    .share-row-actions { display: flex; gap: 8px; margin-top: 6px; }
-    .share-create {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-top: 14px;
-    }
-    .share-expiry-label { font-size: 0.85rem; color: var(--muted); }
-    .share-expiry {
-      padding: 6px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: var(--bg);
-      color: var(--text);
-      font-size: 0.85rem;
-    }
+    /* The share panel's own styles come with it from /hub-share-ui.js. */
 
     .modal-actions {
       display: flex;
@@ -387,7 +343,8 @@ import { memberColor, initial, esc, hubConfirm, hubAlert, searchMatch,
          glyph, chickadee } from "/hub-sdk.js";
 import { canSeeMember, canSeeItem, priorityLabel, sortItems, searchableFields,
          canShare, changedARow, failureLine } from "./logic.js";
-import { createShareUi } from "./share.js";
+import { createShareUi, createOverlayView } from "/hub-share-ui.js";
+import { createWishlistShare } from "./share.js";
 import { createModal } from "./modal.js";
 
 const CONTEXT = window.__CONTEXT_URL ?? "";
@@ -627,24 +584,19 @@ async function saveItem(data) {
 }
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
-const modal = createModal({
-  onClick:  e => shareUi.handleClick(e),
-  onChange: e => shareUi.handleChange(e),
-});
+const modal = createModal();
 const openModal  = modal.open;
 const closeModal = modal.close;
 window.closeModal = closeModal;
 
 // ─── Sharing ──────────────────────────────────────────────────────────────────
-// Declared AFTER the modal, and that order is load-bearing: the deps object is
-// built eagerly, so `openModal: modal.open` reads `modal` the moment this runs.
-// The modal's own handlers reach back through arrows, which are not evaluated
-// until a click — so the cycle only works in this direction.
-// The share flow lives in src/share.js so it can be driven against a real DOM
-// in __tests__/share-ui.test.mjs — it is the only part of this app with
-// sequencing in it (overlapping reads, a modal that can be replaced mid-flight)
-// and the only part whose defects a source-level test cannot see.
-const shareUi = createShareUi({
+// The panel is the hub's (/hub-share-ui.js), the one every sharing app runs;
+// src/share.js adds what a wish list needs to it — the list row before a mint,
+// the owner's notice after, and what a link would show.
+const shareUi = createWishlistShare({
+  createShareUi,
+  createOverlayView,
+  document,
   share,
   db,
   esc,
@@ -652,8 +604,6 @@ const shareUi = createShareUi({
   getMe: () => ME,
   getMembers: () => members,
   getItemsFor: fetchItemsFor,
-  openModal: modal.open,
-  getModalEl: modal.current,
   writeText: (text) => navigator.clipboard.writeText(text),
   notify: sendHubNotification,
   activeLinks: activeShareLinks,

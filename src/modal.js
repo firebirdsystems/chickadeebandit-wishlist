@@ -5,7 +5,7 @@
  * is the reason this is a module rather than two functions in the page — the
  * share modal once kept its target in state beside it, and the teardown that
  * runs at the START of every open cleared it while the share modal was being
- * built. Anything a modal needs belongs ON the modal (see `shareTargetOf`), and
+ * built. Anything a modal needs belongs ON the modal, and
  * the only way to test that is for the tests to drive this exact code rather
  * than a re-implementation of it.
  */

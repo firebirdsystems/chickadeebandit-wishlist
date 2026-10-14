@@ -8,3 +8,4 @@ graft/
 
 # Written and removed by __tests__/boot.test.mjs; never committed.
 src/__boot.generated.mjs
+.hub-share-ui.js

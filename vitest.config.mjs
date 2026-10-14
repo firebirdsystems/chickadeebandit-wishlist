@@ -8,6 +8,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "/hub-sdk.js": fileURLToPath(new URL("./__tests__/helpers/hub-sdk-stub.mjs", import.meta.url)),
+      "/hub-share-ui.js": fileURLToPath(new URL("./__tests__/helpers/hub-share-ui-stub.mjs", import.meta.url)),
     },
   },
   test: {
