@@ -209,6 +209,10 @@
     }
     .item-link:hover { opacity: 1; }
     .item-desc { font-size: 0.8rem; color: var(--muted); margin-top: 3px; }
+    .item-claim { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+    .claim-badge { background: var(--hub-tint-success, #dcfce7); color: var(--hub-tint-success-fg, #166534); }
+    .claim-badge.taken { background: var(--bg); color: var(--muted); }
+    .claims-error { margin: 0 0 10px; padding: 8px 12px; border-radius: 10px; background: var(--hub-tint-warning, #fef3c7); color: var(--hub-tint-warning-fg, #92400e); font-size: 0.85rem; }
 
     .item-actions { display: flex; gap: 4px; flex-shrink: 0; }
     .btn-icon-sm {
@@ -342,7 +346,8 @@ import { memberColor, initial, esc, hubConfirm, hubAlert, searchMatch,
          activeShareLinks, SHARE_EXPIRY_CHOICES, DEFAULT_SHARE_EXPIRY_HOURS,
          glyph, chickadee } from "/hub-sdk.js";
 import { canSeeMember, canSeeItem, priorityLabel, sortItems, searchableFields,
-         canShare, changedARow, failureLine } from "./logic.js";
+         canShare, changedARow, failureLine, canEditListOf, claimsByItem, claimState,
+         claimLabel } from "./logic.js";
 import { createShareUi, createOverlayView } from "/hub-share-ui.js";
 import { createWishlistShare } from "./share.js";
 import { createModal } from "./modal.js";
@@ -351,6 +356,8 @@ const CONTEXT = window.__CONTEXT_URL ?? "";
 const DB      = window.__DB_URL      ?? "";
 const APP_ID  = window.__APP_ID      ?? "wishlist";
 const ME      = window.__CURRENT_MEMBER ?? null;
+// Who supervises here decides whose list an adult may keep (see canEditListOf).
+const TENANT  = { tenantKind: window.__TENANT_KIND ?? "household", isAdmin: window.__IS_ADMIN === true };
 
 const EVENTS = window.__EVENTS_URL ?? "";
 
@@ -383,7 +390,11 @@ let allWishlists = {};  // { [memberId]: true } — members who have at least on
 let browseTarget = null;
 let browseItems  = [];
 let browseFailed = false; // the browse target's list could not be read: unknown, not empty
+let browseLoading = false; // the browse target's list is being read: not yet empty
+let browseClaims = new Map(); // item id → claim, for the browse target's items (never the viewer's own)
+let claimsFailed = false;     // claims could not be read: say so, and offer no claim buttons
 let editingItemId = null;
+let editingOwnerId = null;    // whose list the open editor writes to: the viewer's, or a child's
 
 // ─── DB helper ────────────────────────────────────────────────────────────────
 /**
@@ -404,6 +415,7 @@ const db = createDbHelper(DB);
 /** What a write that touched no rows means for an edit of one specific item:
  *  the page's own line for it, shown as written (`forUser`, see failureLine). */
 const ITEM_GONE = "That item is no longer on your list — it may have been removed on another device.";
+const THEIR_ITEM_GONE = "That item is no longer on their list — it may have been removed on another device.";
 
 // ─── Load ─────────────────────────────────────────────────────────────────────
 async function loadMembers() {
@@ -508,8 +520,11 @@ let browseSeq = 0;
  */
 async function loadBrowseItems(memberId) {
   const seq = ++browseSeq;
+  browseLoading = true;
   let rows = [];
   let failed = false;
+  const at = ++claimsSeq;
+  const claimsRead = fetchClaims().then((claims) => ({ claims, ok: true, at }), () => ({ claims: [], ok: false, at }));
   try {
     rows = await fetchItemsFor(memberId);
   } catch {
@@ -518,9 +533,35 @@ async function loadBrowseItems(memberId) {
     rows = [];
     failed = true;
   }
+  const claimsResult = await claimsRead;
   if (seq !== browseSeq) return;
+  browseLoading = false;
   browseItems = rows;
   browseFailed = failed;
+  applyClaims(claimsResult.claims, claimsResult.ok, claimsResult.at);
+}
+
+/**
+ * Every claim this viewer may see. The hub returns none on the viewer's own
+ * items (hidden_from_parent_owner), so this is safe to read whole and match to
+ * whichever list is on screen. It throws on a failed read: an unread set of
+ * claims is not "nobody is getting anything", and the view says so.
+ */
+/** Claims reads are numbered so an older one (a slow first load) never
+ *  overwrites a newer one (the refresh after a claim). */
+let claimsSeq = 0;
+let claimsApplied = 0;
+function applyClaims(claims, ok, at) {
+  if (at < claimsApplied) return;
+  claimsApplied = at;
+  browseClaims = claimsByItem(claims);
+  claimsFailed = !ok;
+}
+
+async function fetchClaims() {
+  if (!DB) return [];
+  const res = await db("SELECT id, item_id, member_id, status FROM app_wishlist__claims");
+  return res.rows;
 }
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
@@ -531,12 +572,20 @@ async function saveItem(data) {
   // UPDATE would then land on the row it was written for while local state
   // moved a different one.
   const editingId = editingItemId;
+  // Whose list: the viewer's own, or a child's an adult is keeping for them.
+  const ownerId = editingOwnerId ?? ME?.id ?? "demo-1";
+  const isMine = ownerId === (ME?.id ?? "demo-1");
+  // A child's list is on screen only while it is still the browse target: a
+  // save that lands after the adult moved to someone else leaves that view be
+  // (the next load of the child's list reads the row from the hub).
+  const local = () => (isMine ? myItems : browseTarget === ownerId ? browseItems : []);
+  const setLocal = (items) => { if (isMine) myItems = items; else if (browseTarget === ownerId) browseItems = items; };
 
   if (editingId) {
     if (DB && ME) {
       const res = await db(
         "UPDATE app_wishlist__wish_items SET name = ?, description = ?, url = ?, priority = ?, visibility = ?, updated_at = ? WHERE id = ? AND member_id = ?",
-        [data.name, data.description, data.url, data.priority, data.visibility, now, editingId, ME.id]
+        [data.name, data.description, data.url, data.priority, data.visibility, now, editingId, ownerId]
       );
       // See changedARow: `db` throws on a refusal, but a statement that RAN
       // and matched nothing is a 200, and for an edit of one specific row that
@@ -545,16 +594,15 @@ async function saveItem(data) {
         // Drop it locally too. Leaving the phantom on screen means every retry
         // edits a row that is not there and fails identically, with no way out
         // but a reload.
-        myItems = myItems.filter(i => i.id !== editingId);
-        throw Object.assign(new Error(ITEM_GONE), { forUser: true });
+        setLocal(local().filter(i => i.id !== editingId));
+        throw Object.assign(new Error(isMine ? ITEM_GONE : THEIR_ITEM_GONE), { forUser: true });
       }
     }
-    myItems = myItems.map(i =>
+    setLocal(local().map(i =>
       i.id === editingId ? { ...i, ...data, updated_at: now } : i
-    );
+    ));
   } else {
     const id = crypto.randomUUID();
-    const ownerId = ME?.id ?? "demo-1";
     const item = { id, member_id: ownerId, ...data, created_at: now, updated_at: now };
 
     if (DB && ME) {
@@ -563,20 +611,20 @@ async function saveItem(data) {
       // in other apps act on it.
       await db(
         "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [id, ME.id, data.name, data.description, data.url, data.priority, data.visibility, now, now]
+        [id, ownerId, data.name, data.description, data.url, data.priority, data.visibility, now, now]
       );
       // visibility travels with the event so a consuming rule can respect the
       // same audience the row policy enforces rather than re-broadcasting a
       // wish the owner kept private.
       await publishEvent("wish.added", id, {
-        member_id: ME.id,
+        member_id: ownerId,
         name: data.name,
         priority: data.priority,
         visibility: data.visibility,
       });
     }
 
-    myItems = [item, ...myItems];
+    setLocal([item, ...local()]);
     if (!allWishlists[ownerId]) {
       allWishlists[ownerId] = {};
     }
@@ -612,11 +660,16 @@ const shareUi = createWishlistShare({
 });
 
 
-function openItemModal(item = null) {
+function openItemModal(item = null, ownerId = ME?.id ?? null) {
   editingItemId = item?.id ?? null;
-  const vis = item?.visibility ?? "everyone";
+  editingOwnerId = ownerId;
+  // On a child's list an adult keeps, "Only me" would mean only the CHILD:
+  // the adult who wrote it could not see it again. Not offered there.
+  const forOther = !!ownerId && ownerId !== ME?.id;
+  const owner = members.find(m => m.id === ownerId);
+  const vis = item?.visibility && !(forOther && item.visibility === "private") ? item.visibility : "everyone";
   openModal(`
-    <h3>${item ? "Edit Item" : "Add to Wish List"}</h3>
+    <h3>${item ? "Edit Item" : forOther ? `Add to ${esc(owner?.name ?? "their")}’s list` : "Add to Wish List"}</h3>
     <div class="form-group">
       <label>Item name <span style="color:var(--red)">*</span></label>
       <input type="text" id="f-name" placeholder="e.g. Cozy sweater" value="${item ? esc(item.name) : ""}" />
@@ -641,8 +694,8 @@ function openItemModal(item = null) {
       <label>Who can see this</label>
       <div class="vis-pills" id="f-vis-pills">
         <button type="button" class="vis-pill ${vis === "everyone" ? "active" : ""}" data-vis="everyone" onclick="setItemVis('everyone')">${glyph("people", { accent: "currentColor" })} Everyone</button>
-        <button type="button" class="vis-pill ${vis === "adults"   ? "active" : ""}" data-vis="adults"   onclick="setItemVis('adults')">${glyph("lock", { accent: "currentColor" })} Adults only</button>
-        <button type="button" class="vis-pill ${vis === "private"  ? "active" : ""}" data-vis="private"  onclick="setItemVis('private')">${glyph("shield", { accent: "currentColor" })} Only me</button>
+        <button type="button" class="vis-pill ${vis === "adults"   ? "active" : ""}" data-vis="adults"   onclick="setItemVis('adults')">${glyph("lock", { accent: "currentColor" })} ${forOther ? `Adults and ${esc(owner?.name ?? "them")}` : "Adults only"}</button>
+        ${forOther ? "" : `<button type="button" class="vis-pill ${vis === "private"  ? "active" : ""}" data-vis="private"  onclick="setItemVis('private')">${glyph("shield", { accent: "currentColor" })} Only me</button>`}
       </div>
       <input type="hidden" id="f-visibility" value="${vis}" />
     </div>
@@ -664,8 +717,10 @@ window.setItemVis = function(v) {
 
 window.openAddModal = () => openItemModal();
 window.editItem = function(id) {
-  const item = myItems.find(i => i.id === id);
-  if (item) openItemModal(item);
+  const mine = myItems.find(i => i.id === id);
+  if (mine) return openItemModal(mine);
+  const theirs = browseItems.find(i => i.id === id);
+  if (theirs && browseTarget) openItemModal(theirs, browseTarget);
 };
 
 window.submitItem = async function() {
@@ -721,12 +776,15 @@ window.submitItem = async function() {
 };
 
 window.deleteItem = async function(id) {
+  const isMine = myItems.some(i => i.id === id);
+  const ownerId = isMine ? ME?.id : browseTarget;
+  if (!ownerId) return;
   if (!await hubConfirm({ message: "Remove this item?", confirmLabel: "Remove", destructive: true })) return;
   if (DB && ME) {
     try {
       // No zero-row check: a delete that matched nothing has achieved what the
       // member asked for, and complaining about it would be noise.
-      await db("DELETE FROM app_wishlist__wish_items WHERE id = ? AND member_id = ?", [id, ME.id]);
+      await db("DELETE FROM app_wishlist__wish_items WHERE id = ? AND member_id = ?", [id, ownerId]);
     } catch (e) {
       // Dropping it locally would hide the item until the next load and then
       // bring it back, with nothing said in between.
@@ -735,7 +793,109 @@ window.deleteItem = async function(id) {
       return;
     }
   }
-  myItems = myItems.filter(i => i.id !== id);
+  if (isMine) myItems = myItems.filter(i => i.id !== id);
+  else browseItems = browseItems.filter(i => i.id !== id);
+  render();
+};
+
+// ─── Claims ───────────────────────────────────────────────────────────────────
+// A claim is a giver saying "I'll get this", then "bought it". The list's
+// owner never sees one (the hub hides them), so none of this renders on the
+// viewer's own list. One claim per item is a unique index: when two people
+// tap at once, the second is refused and told someone got there first.
+
+const TAKEN = "Someone else just said they’d get this one.";
+
+async function refreshClaims() {
+  const at = ++claimsSeq;
+  try {
+    applyClaims(await fetchClaims(), true, at);
+  } catch {
+    applyClaims([], false, at);
+  }
+}
+
+// One claim write at a time per item: a double tap would otherwise send a
+// second INSERT that the unique index refuses, and tell the member someone
+// else took the item they just took.
+const claimsInFlight = new Set();
+
+/** After a refused or empty claim write, re-read the list on screen: the
+ *  owner may have removed the item, or made it private, on another device.
+ *  True when the item is still there. */
+async function itemStillListed(itemId) {
+  const target = browseTarget;
+  if (!target) return true;
+  await loadBrowseItems(target);
+  // Unknown is not "gone": a failed re-read, or the member moving to another
+  // person's list meanwhile, leaves the plain failure line to speak.
+  if (browseTarget !== target || browseFailed) return true;
+  return browseItems.some((i) => i.id === itemId);
+}
+
+window.claimItem = async function(itemId) {
+  if (!DB || !ME || claimsInFlight.has(itemId)) return;
+  claimsInFlight.add(itemId);
+  const now = new Date().toISOString();
+  let failure = null;
+  try {
+    await db(
+      "INSERT INTO app_wishlist__claims (id, item_id, member_id, status, created_at, updated_at) VALUES (?, ?, ?, 'reserved', ?, ?)",
+      [crypto.randomUUID(), itemId, ME.id, now, now]
+    );
+  } catch (e) {
+    console.error(e);
+    failure = e;
+  } finally {
+    claimsInFlight.delete(itemId);
+  }
+  await refreshClaims();
+  if (failure) {
+    const taken = failure?.code === "UNIQUE_CONSTRAINT" || /UNIQUE constraint failed/i.test(String(failure?.message ?? ""));
+    // Taken by THIS member (another tab, another device) is not a refusal worth telling them about.
+    const mine = browseClaims.get(itemId)?.member_id === ME.id;
+    if (taken) {
+      if (!mine) await hubAlert(TAKEN);
+    } else if (!await itemStillListed(itemId)) {
+      await hubAlert(THEIR_ITEM_GONE);
+    } else {
+      await hubAlert(failureLine(failure, { action: "claim this item", thing: "item" }));
+    }
+  }
+  render();
+};
+
+window.setClaimBought = async function(claimId, bought) {
+  if (!DB || !ME) return;
+  const itemId = [...browseClaims.values()].find((c) => c.id === claimId)?.item_id;
+  try {
+    const res = await db(
+      "UPDATE app_wishlist__claims SET status = ?, updated_at = ? WHERE id = ? AND member_id = ?",
+      [bought ? "bought" : "reserved", new Date().toISOString(), claimId, ME.id]
+    );
+    if (!changedARow(res)) {
+      // Deleting an item takes its claim with it, so say which happened.
+      const listed = itemId ? await itemStillListed(itemId) : true;
+      await hubAlert(listed ? "That claim is no longer there — it may have been released on another device." : THEIR_ITEM_GONE);
+    }
+  } catch (e) {
+    console.error(e);
+    await hubAlert(failureLine(e, { action: "update this claim", thing: "claim" }));
+  }
+  await refreshClaims();
+  render();
+};
+
+window.releaseClaim = async function(claimId) {
+  if (!DB || !ME) return;
+  if (!await hubConfirm({ message: "Let someone else get this?", confirmLabel: "Release", destructive: true })) return;
+  try {
+    await db("DELETE FROM app_wishlist__claims WHERE id = ? AND member_id = ?", [claimId, ME.id]);
+  } catch (e) {
+    console.error(e);
+    await hubAlert(failureLine(e, { action: "release this claim", thing: "claim" }));
+  }
+  await refreshClaims();
   render();
 };
 
@@ -771,7 +931,7 @@ function effectiveMe() {
 function visibleMembers() {
   const me = effectiveMe();
   if (!me) return [];
-  return members.filter(m => canSeeMember(m.id, allWishlists, me));
+  return members.filter(m => canSeeMember(m.id, allWishlists, me, m, TENANT));
 }
 
 function priorityBadgeHtml(p) {
@@ -788,20 +948,49 @@ function visibilityBadgeHtml(visibility) {
 
 function mColor(id) { return memberColor(id, members); }
 
-function renderItemRow(item, isOwner) {
+/** The claim line under someone else's item, with what the viewer can do. */
+function claimHtml(item) {
+  // Every claim action writes to the hub; with no database (the dev server)
+  // or no member session there is nothing a button could do.
+  if (!DB || !ME) return "";
+  const claim = browseClaims.get(item.id);
+  const state = claimState(claim, effectiveMe()?.id);
+  const id = esc(claim?.id ?? "");
+  switch (state) {
+    case "open":
+      return `<button class="btn btn-ghost btn-sm" data-action="claim" data-id="${esc(item.id)}">I’ll get this</button>`;
+    case "mine-reserved":
+      return `<span class="badge claim-badge" data-testid="claim-mine">You’re getting this</span>
+        <button class="btn btn-ghost btn-sm" data-action="bought" data-id="${id}">Mark bought</button>
+        <button class="btn btn-ghost btn-sm" data-action="release" data-id="${id}">Release</button>`;
+    case "mine-bought":
+      return `<span class="badge claim-badge" data-testid="claim-mine">You bought this</span>
+        <button class="btn btn-ghost btn-sm" data-action="unbought" data-id="${id}">Not bought yet</button>`;
+    default:
+      return `<span class="badge claim-badge taken" data-testid="claim-taken">${esc(claimLabel(claim, members))}</span>`;
+  }
+}
+
+/**
+ * One item. `canEdit`: the viewer may edit and remove it (their own list, or a
+ * child's they keep). `showClaims`: someone else's list, where givers claim.
+ */
+function renderItemRow(item, { canEdit = false, showClaims = false, isOwnList = false } = {}) {
   const hasUrl = item.url && item.url.startsWith("http");
+  const isOwner = isOwnList;
   return `
     <div class="item-row">
       <div class="item-main">
         <div class="item-top">
           ${priorityBadgeHtml(item.priority)}
-          ${isOwner ? visibilityBadgeHtml(item.visibility) : ""}
+          ${isOwner || canEdit ? visibilityBadgeHtml(item.visibility) : ""}
           <span class="item-name">${esc(item.name)}</span>
           ${hasUrl ? `<a href="${esc(item.url)}" target="_blank" rel="noopener" class="item-link" title="Open link" aria-label="Open link">${glyph("link")}</a>` : ""}
         </div>
         ${item.description ? `<div class="item-desc">${esc(item.description)}</div>` : ""}
+        ${showClaims && !claimsFailed ? `<div class="item-claim">${claimHtml(item)}</div>` : ""}
       </div>
-      ${isOwner ? `
+      ${canEdit ? `
         <div class="item-actions">
           <button class="btn-icon-sm" data-action="edit-item" data-id="${esc(item.id)}" title="Edit" aria-label="Edit">${glyph("pencil")}</button>
           <button class="btn-icon-sm danger" data-action="delete-item" data-id="${esc(item.id)}" title="Remove" aria-label="Remove">${glyph("trash")}</button>
@@ -856,7 +1045,7 @@ function renderMyList() {
            <p>Your wish list is empty.</p>
            <p style="margin-top:6px;font-size:0.85rem">Add items to let your family know what you'd love!</p>
          </div>`)
-      : `<div class="items-list">${sorted.map(i => renderItemRow(i, true)).join("")}</div>`
+      : `<div class="items-list">${sorted.map(i => renderItemRow(i, { canEdit: true, isOwnList: true })).join("")}</div>`
     }
   `;
 }
@@ -879,7 +1068,7 @@ function renderBrowse() {
     </div>
 
     ${loadErrorHtml()}
-    ${visible.length === 0
+    ${visible.length === 0 && !browseTarget
       ? loadFailed ? "" : `<div class="empty">
            <div class="empty-icon">${chickadee("nest")}</div>
            <p>No family lists to browse yet.</p>
@@ -913,17 +1102,24 @@ function renderBrowseList() {
   const member = members.find(m => m.id === browseTarget);
   const sorted = matchingItems(sortItems(browseItems.filter(i => canSeeItem(i, viewer))));
   const color  = mColor(browseTarget);
+  // An adult keeping a child's list: add and edit here. Claims still show, since
+  // the hub hides them only from the child whose list it is.
+  const keeps = !!ME && !!member && canEditListOf(ME, member, TENANT) && member.id !== ME.id;
 
   return `
     <div class="browse-header">
       <span class="avatar-sm" style="background:${color}">${initial(member?.name ?? "?")}</span>
       <span class="browse-name">${esc(member?.name ?? "")}'s Wish List</span>
-      ${browseFailed ? "" : `<span class="browse-count">${sorted.length} item${sorted.length !== 1 ? "s" : ""}</span>`}
+      ${browseFailed || browseLoading ? "" : `<span class="browse-count">${sorted.length} item${sorted.length !== 1 ? "s" : ""}</span>`}
       ${canShare(share.enabled, ME, member) ? `<button class="btn btn-ghost btn-sm" data-action="share" data-id="${esc(browseTarget)}">Share</button>` : ""}
+      ${keeps ? `<button class="btn btn-primary btn-sm" data-action="add-for" data-id="${esc(browseTarget)}">+ Add</button>` : ""}
     </div>
+    ${claimsFailed && !browseFailed && sorted.length ? `<div class="claims-error" data-testid="claims-error" role="status">Couldn’t load who’s getting what. Check back before you buy.</div>` : ""}
 
     ${browseItems.length ? `<div class="search-row"><input id="search" class="search-input" type="search" placeholder="Search this list…" aria-label="Search this list" value="${esc(searchQ)}" /></div>` : ""}
-    ${browseFailed
+    ${browseLoading && !browseItems.length
+      ? `<div class="empty" style="padding:24px 0"><p>Loading…</p></div>`
+      : browseFailed
       ? `<div class="empty" style="padding:24px 0" data-testid="browse-error"><p>Couldn’t load ${esc(member?.name ?? "their")}${member?.name ? "’s" : ""} list.</p></div>`
       : sorted.length === 0
       ? (searchQ
@@ -932,7 +1128,7 @@ function renderBrowseList() {
            <div class="empty-icon">${chickadee("nest", { size: 72 })}</div>
            <p>${esc(member?.name ?? "They")}'s list is empty.</p>
          </div>`)
-      : `<div class="items-list">${sorted.map(i => renderItemRow(i, false)).join("")}</div>`
+      : `<div class="items-list">${sorted.map(i => renderItemRow(i, { canEdit: keeps, showClaims: true })).join("")}</div>`
     }
   `;
 }
@@ -964,18 +1160,55 @@ function setupDelegation() {
     if (action === "edit-item") window.editItem(id);
     else if (action === "delete-item") window.deleteItem(id);
     else if (action === "share") shareUi.open(id);
+    else if (action === "add-for") openItemModal(null, id);
+    else if (action === "claim") window.claimItem(id);
+    else if (action === "bought") window.setClaimBought(id, true);
+    else if (action === "unbought") window.setClaimBought(id, false);
+    else if (action === "release") window.releaseClaim(id);
   });
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
+// Opened for one member: Secret Santa sends ?member=<id>, Growth Journal
+// ?memberId=<id>. Read once, then taken off the URL so an in-frame reload does
+// not reopen that member. (A hub session refresh rebuilds the frame URL from
+// its own copy of the launch params and resets all state anyway.)
+let launchMember = (() => {
+  try {
+    const params = new URLSearchParams(location.search);
+    const id = params.get("member") ?? params.get("memberId");
+    if (id !== null) {
+      params.delete("member");
+      params.delete("memberId");
+      const query = params.toString();
+      history.replaceState(history.state, "", `${location.pathname}${query ? `?${query}` : ""}${location.hash}`);
+    }
+    return id || null;
+  } catch { return null; }
+})();
+
 async function firstLoad() {
   const [gotMembers, loaded] = await Promise.all([loadMembers().then(() => true, () => false), loadMyData()]);
   loadFailed = loaded === false || !gotMembers;
   render();
 
-  // Pre-load the first visible member's items in the background
+  // Opened for one member (Secret Santa's "Browse their Wish List" passes
+  // ?member=<id>): go straight to their list, when it is one this viewer may
+  // browse. Anything else falls back to the first visible member.
   const visible = visibleMembers();
-  if (visible.length > 0) {
+  // Any other member of the household, even one with nothing on their list yet
+  // (Browse then says their list is empty, rather than showing your own).
+  const wanted = launchMember && launchMember !== effectiveMe()?.id && members.some(m => m.id === launchMember)
+    ? launchMember : null;
+  // Spent once the members are known; kept through a failed load so "Try
+  // again" still opens the member it was asked for.
+  if (gotMembers) launchMember = null;
+  if (wanted) {
+    tab = "browse";
+    browseTarget = wanted;
+    render();
+    loadBrowseItems(browseTarget).then(render).catch(() => {});
+  } else if (visible.length > 0) {
     browseTarget = visible[0].id;
     loadBrowseItems(browseTarget).then(render).catch(() => {});
   }

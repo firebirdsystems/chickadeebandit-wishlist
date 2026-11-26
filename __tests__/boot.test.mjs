@@ -207,3 +207,72 @@ describe("the page boots", () => {
     expect(document.querySelector(".modal-backdrop")).toBeNull();
   });
 });
+
+describe("opening for one member, and claims on their list", () => {
+  const CASEY_ITEMS = [
+    { id: "k1", member_id: "demo-3", name: "LEGO Space set", description: "", url: "", priority: "high", visibility: "everyone", created_at: "2026-01-01T00:00:00Z" },
+    { id: "k2", member_id: "demo-3", name: "Colored pencils", description: "", url: "", priority: "medium", visibility: "everyone", created_at: "2026-01-02T00:00:00Z" },
+  ];
+  const reply = (claims) => (sql) => {
+    if (sql.includes("FROM app_wishlist__claims")) return { rows: claims };
+    if (sql.includes("WHERE member_id = ?")) return { rows: CASEY_ITEMS };
+    return { rows: [] };
+  };
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  beforeEach(() => { history.replaceState(null, "", "/"); });
+
+  it("opens the member named by ?member= in Browse, and takes the param off the URL", async () => {
+    history.replaceState(null, "", "/?member=demo-3&theme=dark");
+    await bootWithDb(reply([]));
+    await settle();
+    const root = document.getElementById("root").textContent;
+    expect(root).toContain("Casey's Wish List");
+    expect(root).toContain("LEGO Space set");
+    expect(location.search).toBe("?theme=dark");
+  });
+
+  it("takes Growth Journal's ?memberId= too", async () => {
+    history.replaceState(null, "", "/?memberId=demo-3");
+    await bootWithDb(reply([]));
+    await settle();
+    expect(document.getElementById("root").textContent).toContain("Casey's Wish List");
+  });
+
+  it("ignores a member it does not know, and stays on My List", async () => {
+    history.replaceState(null, "", "/?member=nobody");
+    await bootWithDb(reply([]));
+    await settle();
+    // My List is the active tab, and no member's Browse list was opened.
+    expect(document.querySelector(".tab.active").textContent).toBe("My List");
+    expect(document.getElementById("root").textContent).not.toContain("'s Wish List");
+  });
+
+  it("offers I'll get this on an open item and names whoever took the other", async () => {
+    history.replaceState(null, "", "/?member=demo-3");
+    await bootWithDb(reply([{ id: "c1", item_id: "k2", member_id: "demo-2", status: "bought" }]));
+    await settle();
+    const root = document.getElementById("root");
+    expect(root.querySelectorAll('[data-action="claim"]').length).toBe(1);
+    expect(root.querySelector('[data-action="claim"]').dataset.id).toBe("k1");
+    expect(root.textContent).toContain("Bought by Jordan");
+  });
+
+  it("says claims could not be read rather than offering buttons", async () => {
+    history.replaceState(null, "", "/?member=demo-3");
+    await bootWithDb(reply([]), (sql) => (sql.includes("FROM app_wishlist__claims") ? 503 : 200));
+    await settle();
+    const root = document.getElementById("root");
+    expect(root.querySelector('[data-testid="claims-error"]')).not.toBeNull();
+    expect(root.querySelectorAll('[data-action="claim"]').length).toBe(0);
+  });
+
+  it("offers an adult + Add on a child's list, and not on another adult's", async () => {
+    history.replaceState(null, "", "/?member=demo-3");
+    await bootWithDb(reply([]));
+    await settle();
+    expect(document.querySelector('[data-action="add-for"]')).not.toBeNull();
+    await window.selectBrowseMember("demo-2");
+    expect(document.querySelector('[data-action="add-for"]')).toBeNull();
+  });
+});

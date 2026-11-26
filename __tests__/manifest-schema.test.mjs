@@ -25,7 +25,7 @@ function schema() {
   for (const file of readdirSync(join(root, "migrations")).sort()) {
     const sql = readFileSync(join(root, "migrations", file), "utf-8")
       .replace(/^\s*--.*$/gm, "");   // comments can contain anything
-    for (const m of sql.matchAll(/CREATE TABLE(?: IF NOT EXISTS)?\s+(\w+)\s*\(([\s\S]*?)\n\s*\);/g)) {
+    for (const m of sql.matchAll(/CREATE TABLE(?: IF NOT EXISTS)?\s+(\w+)\s*\(([\s\S]*?)\n\s*\)(?:\s*STRICT)?;/g)) {
       const [, table, body] = m;
       tables[table] ??= new Set();
       for (const line of body.split("\n")) {
@@ -48,7 +48,7 @@ describe("the migrations build the schema the manifest describes", () => {
   it("parsed both app tables out of the migrations", () => {
     // Guards the parser itself: if these regexes ever stop matching, every
     // assertion below would pass vacuously against an empty schema.
-    expect(Object.keys(tables).sort()).toEqual([`${prefix}lists`, `${prefix}wish_items`]);
+    expect(Object.keys(tables).sort()).toEqual([`${prefix}claims`, `${prefix}lists`, `${prefix}wish_items`]);
     expect([...tables[`${prefix}wish_items`]]).toEqual(
       expect.arrayContaining(["id", "member_id", "name", "visibility", "priority", "url", "source_event_id"]));
   });

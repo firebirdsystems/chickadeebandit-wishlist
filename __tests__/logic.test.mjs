@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { canSeeMember, canSeeItem, priorityOrder, sortItems, priorityLabel, searchableFields,
-         wishListTitle, shareableItemCount, canShare, changedARow } from "../src/logic.js";
+         wishListTitle, shareableItemCount, canShare, changedARow, canEditListOf, claimsByItem,
+         claimState, claimLabel, supervises } from "../src/logic.js";
 
 const members = [
   { id: "adult-1", name: "Alex",   role: "adult" },
@@ -222,5 +223,89 @@ describe("changedARow", () => {
   // The case the SDK cannot catch: the statement ran, and matched nothing.
   it("rejects a write that matched nothing", () => {
     expect(changedARow({ rows: [], changed: 0 })).toBe(false);
+  });
+});
+
+describe("canEditListOf", () => {
+  const adult = { id: "adult-1", role: "adult" };
+  const other = { id: "adult-2", role: "adult" };
+  const kid = { id: "child-1", role: "child" };
+  const kid2 = { id: "child-2", role: "child" };
+
+  it("lets anyone edit their own list", () => {
+    expect(canEditListOf(adult, adult)).toBe(true);
+    expect(canEditListOf(kid, kid)).toBe(true);
+  });
+  it("lets an adult keep a child's list", () => {
+    expect(canEditListOf(adult, kid)).toBe(true);
+  });
+  it("never offers another adult's list, or a child another child's", () => {
+    expect(canEditListOf(adult, other)).toBe(false);
+    expect(canEditListOf(kid, kid2)).toBe(false);
+    expect(canEditListOf(kid, adult)).toBe(false);
+  });
+  it("refuses a viewer or subject with no id", () => {
+    expect(canEditListOf(null, kid)).toBe(false);
+    expect(canEditListOf({ role: "adult" }, kid)).toBe(false);
+    expect(canEditListOf(adult, { role: "child" })).toBe(false);
+  });
+});
+
+describe("canSeeMember for a child with no list yet", () => {
+  it("shows an adult the child, so they can start a list", () => {
+    expect(canSeeMember("child-9", {}, { id: "adult-1", role: "adult" }, { id: "child-9", role: "child" })).toBe(true);
+  });
+  it("does not show an empty adult list, or an empty child's list to a child", () => {
+    expect(canSeeMember("adult-9", {}, { id: "adult-1", role: "adult" }, { id: "adult-9", role: "adult" })).toBe(false);
+    expect(canSeeMember("child-9", {}, { id: "child-1", role: "child" }, { id: "child-9", role: "child" })).toBe(false);
+  });
+});
+
+describe("claims", () => {
+  const claims = [
+    { id: "c1", item_id: "i1", member_id: "adult-2", status: "reserved" },
+    { id: "c2", item_id: "i2", member_id: "adult-1", status: "bought" },
+    { id: "c3", item_id: "i1", member_id: "adult-1", status: "bought" },
+  ];
+
+  it("keys claims by item, first one read winning", () => {
+    const map = claimsByItem(claims);
+    expect(map.get("i1").id).toBe("c1");
+    expect(map.get("i2").id).toBe("c2");
+    expect(claimsByItem(null).size).toBe(0);
+    expect(claimsByItem([{ id: "x" }]).size).toBe(0);
+  });
+
+  it("names every state from the viewer's side", () => {
+    expect(claimState(undefined, "adult-1")).toBe("open");
+    expect(claimState(claims[0], "adult-1")).toBe("taken-reserved");
+    expect(claimState(claims[0], "adult-2")).toBe("mine-reserved");
+    expect(claimState(claims[1], "adult-1")).toBe("mine-bought");
+    expect(claimState(claims[1], "adult-2")).toBe("taken-bought");
+  });
+
+  it("labels someone else's claim with their name, or someone", () => {
+    expect(claimLabel(claims[0], members)).toBe("Reserved by Morgan");
+    expect(claimLabel(claims[1], members)).toBe("Bought by Alex");
+    expect(claimLabel({ member_id: "gone", status: "bought" }, members)).toBe("Bought by someone");
+  });
+});
+
+describe("supervises / canEditListOf in a shared space", () => {
+  const adult = { id: "adult-1", role: "adult" };
+  const kid = { id: "child-1", role: "child" };
+  const space = { tenantKind: "shared_space", isAdmin: false };
+  const stewardSpace = { tenantKind: "shared_space", isAdmin: true };
+
+  it("every adult supervises in a household, only the admin in a space", () => {
+    expect(supervises(adult)).toBe(true);
+    expect(supervises(adult, space)).toBe(false);
+    expect(supervises(adult, stewardSpace)).toBe(true);
+    expect(supervises(kid, stewardSpace)).toBe(false);
+  });
+  it("offers a child's list only to a supervisor", () => {
+    expect(canEditListOf(adult, kid, space)).toBe(false);
+    expect(canEditListOf(adult, kid, stewardSpace)).toBe(true);
+    expect(canSeeMember("child-1", {}, adult, kid, space)).toBe(false);
   });
 });

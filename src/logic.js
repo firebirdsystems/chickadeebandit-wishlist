@@ -6,9 +6,73 @@ export { isAdult };
  * Members only appear if they have a wishlist row and are not the viewer.
  * Item-level visibility is enforced separately via canSeeItem.
  */
-export function canSeeMember(targetMemberId, wishlists, me) {
+export function canSeeMember(targetMemberId, wishlists, me, target = null, tenant = HOUSEHOLD) {
   if (targetMemberId === me.id) return false;
-  return targetMemberId in wishlists;
+  // A supervisor also sees a child with no list yet, so they can start one.
+  return targetMemberId in wishlists || (target !== null && canEditListOf(me, target, tenant));
+}
+
+/** The default tenant: a household, where every adult supervises. */
+export const HOUSEHOLD = Object.freeze({ tenantKind: "household", isAdmin: false });
+
+/**
+ * Whether the hub treats `viewer` as a supervisor here: every adult in a
+ * household, and only an admin (the steward) in a shared space. Mirrors the
+ * hub's own rule, which decides whose rows a supervisor may write.
+ */
+export function supervises(viewer, tenant = HOUSEHOLD) {
+  if (!isAdult(viewer)) return false;
+  return tenant?.tenantKind === "shared_space" ? tenant.isAdmin === true : true;
+}
+
+/**
+ * Whether `viewer` may add to and edit `subject`'s list from this app: their
+ * own, or a CHILD's when the viewer supervises (a four-year-old cannot type a
+ * list, and grandparents ask the parents anyway).
+ *
+ * The hub enforces the same line: wish_items sets `supervisor_children_only`,
+ * so a supervisor writes their own rows and current children's and never
+ * another adult's, and keeps a supplied owner on an INSERT only for a child.
+ * Offering the buttons to anyone the hub would not let through would make an
+ * "add" land on the viewer's own list and an edit silently change nothing.
+ */
+export function canEditListOf(viewer, subject, tenant = HOUSEHOLD) {
+  if (!viewer?.id || !subject?.id) return false;
+  if (viewer.id === subject.id) return true;
+  return subject.role === "child" && supervises(viewer, tenant);
+}
+
+/** Claims keyed by the item they are on. One claim per item (a unique index),
+ *  so a second row for an item would be a bug; the first one read wins. */
+export function claimsByItem(claims) {
+  const out = new Map();
+  for (const claim of claims ?? []) {
+    if (claim?.item_id && !out.has(claim.item_id)) out.set(claim.item_id, claim);
+  }
+  return out;
+}
+
+/**
+ * What a giver sees on someone else's item:
+ *   "open"            nobody has claimed it
+ *   "mine-reserved"   the viewer said they will get it
+ *   "mine-bought"     the viewer has bought it
+ *   "taken-reserved"  someone else said they will get it
+ *   "taken-bought"    someone else has bought it
+ * The item's owner never reaches this: the hub returns them no claims.
+ */
+export function claimState(claim, viewerId) {
+  if (!claim) return "open";
+  const mine = claim.member_id === viewerId;
+  const bought = claim.status === "bought";
+  if (mine) return bought ? "mine-bought" : "mine-reserved";
+  return bought ? "taken-bought" : "taken-reserved";
+}
+
+/** The badge line for a claim someone else made: "Bought by Morgan". */
+export function claimLabel(claim, members) {
+  const who = (members ?? []).find((m) => m.id === claim?.member_id)?.name ?? "someone";
+  return `${claim?.status === "bought" ? "Bought" : "Reserved"} by ${who}`;
 }
 
 /**

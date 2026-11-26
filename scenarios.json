@@ -60,10 +60,11 @@
       ]
     },
     {
-      "name": "only the owner can edit or delete their wishes; another member cannot plant a wish on someone else's list",
+      "name": "an adult may add to and edit a child's list, never another adult's; a child writes only their own",
       "members": {
         "owner": "adult",
-        "otherAdult": "adult"
+        "otherAdult": "adult",
+        "kid": "child"
       },
       "steps": [
         {
@@ -77,6 +78,24 @@
             "Blue, 26 inch",
             "https://example.com/bike",
             "high",
+            "2026-01-01T00:00:00Z",
+            "2026-01-01T00:00:00Z"
+          ],
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "db",
+          "as": "owner",
+          "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'private', ?, ?)",
+          "params": [
+            "w_secret",
+            "{{owner}}",
+            "Secret",
+            "Only me",
+            "",
+            "low",
             "2026-01-01T00:00:00Z",
             "2026-01-01T00:00:00Z"
           ],
@@ -105,16 +124,19 @@
         {
           "action": "db",
           "as": "owner",
-          "sql": "SELECT id FROM app_wishlist__wish_items WHERE member_id = ?",
+          "sql": "SELECT id FROM app_wishlist__wish_items WHERE member_id = ? ORDER BY id",
           "params": [
             "{{owner}}"
           ],
           "expect": {
             "status": 200,
-            "rowCount": 1,
+            "rowCount": 2,
             "rowsContain": [
               {
                 "id": "w1"
+              },
+              {
+                "id": "w_secret"
               }
             ]
           }
@@ -147,6 +169,14 @@
         {
           "action": "db",
           "as": "otherAdult",
+          "sql": "DELETE FROM app_wishlist__wish_items WHERE visibility = 'private'",
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "db",
+          "as": "otherAdult",
           "sql": "DELETE FROM app_wishlist__wish_items WHERE id = 'w1'",
           "expect": {
             "status": 200
@@ -154,15 +184,21 @@
         },
         {
           "action": "db",
-          "as": "otherAdult",
-          "sql": "SELECT id, priority FROM app_wishlist__wish_items WHERE id = 'w1'",
+          "as": "owner",
+          "sql": "SELECT id, priority FROM app_wishlist__wish_items WHERE member_id = ? ORDER BY id",
+          "params": [
+            "{{owner}}"
+          ],
           "expect": {
             "status": 200,
-            "rowCount": 1,
+            "rowCount": 2,
             "rowsContain": [
               {
                 "id": "w1",
                 "priority": "high"
+              },
+              {
+                "id": "w_secret"
               }
             ]
           }
@@ -170,6 +206,75 @@
         {
           "action": "db",
           "as": "owner",
+          "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'everyone', ?, ?)",
+          "params": [
+            "w_kid",
+            "{{kid}}",
+            "Lego",
+            "Space set",
+            "",
+            "high",
+            "2026-01-01T00:00:00Z",
+            "2026-01-01T00:00:00Z"
+          ],
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "db",
+          "as": "kid",
+          "sql": "SELECT id FROM app_wishlist__wish_items WHERE member_id = ?",
+          "params": [
+            "{{kid}}"
+          ],
+          "expect": {
+            "status": 200,
+            "rowCount": 1,
+            "rowsContain": [
+              {
+                "id": "w_kid"
+              }
+            ]
+          }
+        },
+        {
+          "action": "db",
+          "as": "otherAdult",
+          "sql": "UPDATE app_wishlist__wish_items SET priority = 'low' WHERE id = 'w_kid'",
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "db",
+          "as": "kid",
+          "sql": "SELECT id, priority FROM app_wishlist__wish_items WHERE id = 'w_kid'",
+          "expect": {
+            "status": 200,
+            "rowCount": 1,
+            "rowsContain": [
+              {
+                "id": "w_kid",
+                "priority": "low"
+              }
+            ]
+          }
+        },
+        {
+          "action": "db",
+          "as": "owner",
+          "sql": "UPDATE app_wishlist__wish_items SET member_id = ? WHERE id = 'w_kid'",
+          "params": [
+            "{{owner}}"
+          ],
+          "expect": {
+            "status": 403
+          }
+        },
+        {
+          "action": "db",
+          "as": "kid",
           "sql": "UPDATE app_wishlist__wish_items SET priority = 'medium' WHERE id = 'w1'",
           "expect": {
             "status": 200
@@ -177,15 +282,859 @@
         },
         {
           "action": "db",
-          "as": "otherAdult",
-          "sql": "SELECT id, priority FROM app_wishlist__wish_items WHERE id = 'w1'",
+          "as": "owner",
+          "sql": "SELECT priority FROM app_wishlist__wish_items WHERE id = 'w1'",
+          "expect": {
+            "status": 200,
+            "rowsContain": [
+              {
+                "priority": "high"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "claims are hidden from the item's owner in every read and write, and seen by everyone else who can see the item",
+      "members": {
+        "owner": "adult",
+        "giver": "adult",
+        "giver2": "adult",
+        "kid": "child"
+      },
+      "steps": [
+        {
+          "action": "seedRaw",
+          "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES ('w1', ?, 'Board game', '', '', 'high', 'everyone', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'), ('w_adults', ?, 'Wine glasses', '', '', 'medium', 'adults', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+          "params": [
+            "{{owner}}",
+            "{{owner}}"
+          ]
+        },
+        {
+          "action": "db",
+          "as": "giver",
+          "sql": "INSERT INTO app_wishlist__claims (id, item_id, member_id, status, created_at, updated_at) VALUES (?, ?, ?, 'reserved', '2026-01-02T00:00:00Z', '2026-01-02T00:00:00Z')",
+          "params": [
+            "c1",
+            "w1",
+            "{{owner}}"
+          ],
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "db",
+          "as": "giver",
+          "sql": "INSERT INTO app_wishlist__claims (id, item_id, member_id, status, created_at, updated_at) VALUES (?, ?, ?, 'reserved', '2026-01-02T00:00:00Z', '2026-01-02T00:00:00Z')",
+          "params": [
+            "c2",
+            "w_adults",
+            "{{giver}}"
+          ],
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "db",
+          "as": "giver",
+          "sql": "SELECT id, member_id FROM app_wishlist__claims ORDER BY id",
+          "expect": {
+            "status": 200,
+            "rowCount": 2,
+            "rowsContain": [
+              {
+                "id": "c1"
+              }
+            ]
+          }
+        },
+        {
+          "action": "db",
+          "as": "owner",
+          "sql": "SELECT id FROM app_wishlist__claims",
+          "expect": {
+            "status": 200,
+            "rowCount": 0
+          }
+        },
+        {
+          "action": "db",
+          "as": "owner",
+          "sql": "SELECT COUNT(*) AS n FROM app_wishlist__claims",
+          "expect": {
+            "status": 200,
+            "rowsContain": [
+              {
+                "n": 0
+              }
+            ]
+          }
+        },
+        {
+          "action": "db",
+          "as": "owner",
+          "sql": "SELECT w.id, c.status FROM app_wishlist__wish_items w LEFT JOIN app_wishlist__claims c ON c.item_id = w.id WHERE c.id IS NOT NULL",
+          "expect": {
+            "status": 200,
+            "rowCount": 0
+          }
+        },
+        {
+          "action": "db",
+          "as": "owner",
+          "sql": "SELECT id FROM app_wishlist__wish_items WHERE id IN (SELECT item_id FROM app_wishlist__claims)",
+          "expect": {
+            "status": 403
+          }
+        },
+        {
+          "action": "db",
+          "as": "owner",
+          "sql": "UPDATE app_wishlist__claims SET status = 'bought'",
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "db",
+          "as": "owner",
+          "sql": "DELETE FROM app_wishlist__claims",
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "db",
+          "as": "giver",
+          "sql": "SELECT id, status FROM app_wishlist__claims WHERE id = 'c1'",
           "expect": {
             "status": 200,
             "rowCount": 1,
             "rowsContain": [
               {
-                "id": "w1",
-                "priority": "medium"
+                "id": "c1",
+                "status": "reserved"
+              }
+            ]
+          }
+        },
+        {
+          "action": "db",
+          "as": "owner",
+          "sql": "INSERT INTO app_wishlist__claims (id, item_id, member_id, status, created_at, updated_at) VALUES (?, ?, ?, 'reserved', '2026-01-02T00:00:00Z', '2026-01-02T00:00:00Z')",
+          "params": [
+            "c_own",
+            "w1",
+            "{{owner}}"
+          ],
+          "expect": {
+            "status": 403
+          }
+        },
+        {
+          "action": "db",
+          "as": "kid",
+          "sql": "SELECT id FROM app_wishlist__claims",
+          "expect": {
+            "status": 200,
+            "rowCount": 1,
+            "rowsContain": [
+              {
+                "id": "c1"
+              }
+            ]
+          }
+        },
+        {
+          "action": "db",
+          "as": "giver2",
+          "sql": "SELECT id FROM app_wishlist__claims ORDER BY id",
+          "expect": {
+            "status": 200,
+            "rowCount": 2
+          }
+        },
+        {
+          "action": "db",
+          "as": "giver2",
+          "sql": "UPDATE app_wishlist__claims SET status = 'bought' WHERE id = 'c1'",
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "db",
+          "as": "giver",
+          "sql": "SELECT status FROM app_wishlist__claims WHERE id = 'c1'",
+          "expect": {
+            "status": 200,
+            "rowsContain": [
+              {
+                "status": "reserved"
+              }
+            ]
+          }
+        },
+        {
+          "action": "db",
+          "as": "giver",
+          "sql": "UPDATE app_wishlist__claims SET status = 'bought' WHERE id = 'c1'",
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "db",
+          "as": "giver2",
+          "sql": "SELECT status FROM app_wishlist__claims WHERE id = 'c1'",
+          "expect": {
+            "status": 200,
+            "rowsContain": [
+              {
+                "status": "bought"
+              }
+            ]
+          }
+        },
+        {
+          "action": "db",
+          "as": "owner",
+          "sql": "SELECT id FROM app_wishlist__claims",
+          "expect": {
+            "status": 200,
+            "rowCount": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "one claim per item: a second giver is refused; deleting the item takes its claim with it",
+      "members": {
+        "owner": "adult",
+        "giver": "adult",
+        "giver2": "adult"
+      },
+      "steps": [
+        {
+          "action": "seedRaw",
+          "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES ('w1', ?, 'Board game', '', '', 'high', 'everyone', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'), ('w_adults', ?, 'Wine glasses', '', '', 'medium', 'adults', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+          "params": [
+            "{{owner}}",
+            "{{owner}}"
+          ]
+        },
+        {
+          "action": "db",
+          "as": "giver",
+          "sql": "INSERT INTO app_wishlist__claims (id, item_id, member_id, status, created_at, updated_at) VALUES (?, ?, ?, 'reserved', '2026-01-02T00:00:00Z', '2026-01-02T00:00:00Z')",
+          "params": [
+            "c1",
+            "w1",
+            "x"
+          ],
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "db",
+          "as": "giver2",
+          "sql": "INSERT INTO app_wishlist__claims (id, item_id, member_id, status, created_at, updated_at) VALUES (?, ?, ?, 'reserved', '2026-01-02T00:00:00Z', '2026-01-02T00:00:00Z')",
+          "params": [
+            "c2",
+            "w1",
+            "x"
+          ],
+          "expect": {
+            "status": 400
+          }
+        },
+        {
+          "action": "db",
+          "as": "giver2",
+          "sql": "SELECT id FROM app_wishlist__claims",
+          "expect": {
+            "status": 200,
+            "rowCount": 1,
+            "rowsContain": [
+              {
+                "id": "c1"
+              }
+            ]
+          }
+        },
+        {
+          "action": "db",
+          "as": "owner",
+          "sql": "DELETE FROM app_wishlist__wish_items WHERE id = 'w1'",
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "db",
+          "as": "giver",
+          "sql": "SELECT id FROM app_wishlist__claims",
+          "expect": {
+            "status": 200,
+            "rowCount": 0
+          }
+        }
+      ]
+    },
+    {
+      "name": "a child's list kept by a parent: claims are hidden from the child, not from the parent",
+      "members": {
+        "parent": "adult",
+        "giver": "adult",
+        "kid": "child"
+      },
+      "steps": [
+        {
+          "action": "db",
+          "as": "parent",
+          "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'everyone', ?, ?)",
+          "params": [
+            "w_kid",
+            "{{kid}}",
+            "Lego",
+            "",
+            "",
+            "high",
+            "2026-01-01T00:00:00Z",
+            "2026-01-01T00:00:00Z"
+          ],
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "db",
+          "as": "giver",
+          "sql": "INSERT INTO app_wishlist__claims (id, item_id, member_id, status, created_at, updated_at) VALUES (?, ?, ?, 'reserved', '2026-01-02T00:00:00Z', '2026-01-02T00:00:00Z')",
+          "params": [
+            "c1",
+            "w_kid",
+            "x"
+          ],
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "db",
+          "as": "kid",
+          "sql": "SELECT id FROM app_wishlist__claims",
+          "expect": {
+            "status": 200,
+            "rowCount": 0
+          }
+        },
+        {
+          "action": "db",
+          "as": "parent",
+          "sql": "SELECT id FROM app_wishlist__claims",
+          "expect": {
+            "status": 200,
+            "rowCount": 1,
+            "rowsContain": [
+              {
+                "id": "c1"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "the item's owner cannot probe for a claim with a batch, a computed or literal item id, or a change count: claimed and unclaimed answer alike",
+      "members": {
+        "owner": "adult",
+        "giver": "adult"
+      },
+      "steps": [
+        {
+          "action": "seedRaw",
+          "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES ('g1', ?, 'c', '', '', 'high', 'everyone', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+          "params": [
+            "{{giver}}"
+          ]
+        },
+        {
+          "action": "seedRaw",
+          "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES ('w_claimed', ?, 'a', '', '', 'high', 'everyone', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'), ('w_open', ?, 'b', '', '', 'high', 'everyone', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+          "params": [
+            "{{owner}}",
+            "{{owner}}"
+          ]
+        },
+        {
+          "action": "db",
+          "as": "giver",
+          "sql": "INSERT INTO app_wishlist__claims (id, item_id, member_id, status, created_at, updated_at) VALUES (?, ?, ?, 'reserved', '2026-01-02T00:00:00Z', '2026-01-02T00:00:00Z')",
+          "params": [
+            "c1",
+            "w_claimed",
+            "x"
+          ],
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "batch",
+          "as": "owner",
+          "statements": [
+            {
+              "sql": "INSERT OR IGNORE INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES (?, ?, 'x', '', '', 'low', 'everyone', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+              "params": [
+                "w_claimed",
+                "{{owner}}"
+              ]
+            },
+            {
+              "sql": "INSERT INTO app_wishlist__claims (id, item_id, member_id, status, created_at, updated_at) VALUES (?, ?, ?, 'reserved', '2026-01-02T00:00:00Z', '2026-01-02T00:00:00Z')",
+              "params": [
+                "p1",
+                "w_claimed",
+                "x"
+              ]
+            }
+          ],
+          "expect": {
+            "status": 403,
+            "errorIncludes": "is hidden from its owner"
+          }
+        },
+        {
+          "action": "batch",
+          "as": "owner",
+          "statements": [
+            {
+              "sql": "INSERT OR IGNORE INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES (?, ?, 'x', '', '', 'low', 'everyone', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+              "params": [
+                "w_open",
+                "{{owner}}"
+              ]
+            },
+            {
+              "sql": "INSERT INTO app_wishlist__claims (id, item_id, member_id, status, created_at, updated_at) VALUES (?, ?, ?, 'reserved', '2026-01-02T00:00:00Z', '2026-01-02T00:00:00Z')",
+              "params": [
+                "p2",
+                "w_open",
+                "x"
+              ]
+            }
+          ],
+          "expect": {
+            "status": 403,
+            "errorIncludes": "is hidden from its owner"
+          }
+        },
+        {
+          "action": "db",
+          "as": "owner",
+          "sql": "INSERT INTO app_wishlist__claims (id, item_id, member_id, status, created_at, updated_at) VALUES ('p3', lower(?), ?, 'reserved', '2026-01-02T00:00:00Z', '2026-01-02T00:00:00Z')",
+          "params": [
+            "w_claimed",
+            "x"
+          ],
+          "expect": {
+            "status": 403,
+            "errorIncludes": "must be a bound value"
+          }
+        },
+        {
+          "action": "db",
+          "as": "owner",
+          "sql": "INSERT INTO app_wishlist__claims (id, item_id, member_id, status, created_at, updated_at) VALUES ('p4', lower(?), ?, 'reserved', '2026-01-02T00:00:00Z', '2026-01-02T00:00:00Z')",
+          "params": [
+            "w_open",
+            "x"
+          ],
+          "expect": {
+            "status": 403,
+            "errorIncludes": "must be a bound value"
+          }
+        },
+        {
+          "action": "db",
+          "as": "owner",
+          "sql": "INSERT INTO app_wishlist__claims (id, item_id, member_id, status, created_at, updated_at) VALUES ('p5', 'w_claimed', ?, 'reserved', '2026-01-02T00:00:00Z', '2026-01-02T00:00:00Z')",
+          "params": [
+            "x"
+          ],
+          "expect": {
+            "status": 403,
+            "errorIncludes": "must be a bound value"
+          }
+        },
+        {
+          "action": "db",
+          "as": "owner",
+          "sql": "DELETE FROM app_wishlist__wish_items WHERE id = ? RETURNING changes() AS n",
+          "params": [
+            "w_claimed"
+          ],
+          "expect": {
+            "status": 400,
+            "errorIncludes": "are not allowed"
+          }
+        },
+        {
+          "action": "db",
+          "as": "owner",
+          "sql": "DELETE FROM app_wishlist__wish_items WHERE id = ? RETURNING changes() AS n",
+          "params": [
+            "w_open"
+          ],
+          "expect": {
+            "status": 400,
+            "errorIncludes": "are not allowed"
+          }
+        },
+        {
+          "action": "db",
+          "as": "owner",
+          "sql": "DELETE FROM app_wishlist__wish_items WHERE id = ? RETURNING \"changes\"() AS n",
+          "params": [
+            "w_claimed"
+          ],
+          "expect": {
+            "status": 400,
+            "errorIncludes": "are not allowed"
+          }
+        },
+        {
+          "action": "db",
+          "as": "owner",
+          "sql": "INSERT INTO app_wishlist__claims (id, item_id, member_id, status, created_at, updated_at) VALUES (?, ?, ?, 'reserved', '2026-01-02T00:00:00Z', '2026-01-02T00:00:00Z') RETURNING rowid AS r",
+          "params": [
+            "p9",
+            "g1",
+            "x"
+          ],
+          "expect": {
+            "status": 403,
+            "errorIncludes": "may not read rowid"
+          }
+        },
+        {
+          "action": "db",
+          "as": "owner",
+          "sql": "SELECT rowid AS r, id FROM app_wishlist__claims",
+          "expect": {
+            "status": 403,
+            "errorIncludes": "may not read rowid"
+          }
+        },
+        {
+          "action": "db",
+          "as": "owner",
+          "sql": "SELECT last_insert_rowid() AS r",
+          "expect": {
+            "status": 400,
+            "errorIncludes": "are not allowed"
+          }
+        },
+        {
+          "action": "db",
+          "as": "owner",
+          "sql": "SELECT \"rowid\" AS r, id FROM app_wishlist__claims",
+          "expect": {
+            "status": 403,
+            "errorIncludes": "may not read rowid"
+          }
+        },
+        {
+          "action": "db",
+          "as": "owner",
+          "sql": "SELECT \"last_insert_rowid\"() AS r",
+          "expect": {
+            "status": 400,
+            "errorIncludes": "are not allowed"
+          }
+        },
+        {
+          "action": "db",
+          "as": "giver",
+          "sql": "SELECT id FROM app_wishlist__claims ORDER BY id",
+          "expect": {
+            "status": 200,
+            "rowCount": 1,
+            "rowsContain": [
+              {
+                "id": "c1"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "a child's only-me item stays the child's: an adult can neither reveal, read nor delete it, and still edits the child's visible items",
+      "members": {
+        "mom": "adult",
+        "kid": "child"
+      },
+      "steps": [
+        {
+          "action": "db",
+          "as": "kid",
+          "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, '', '', 'low', ?, ?, ?)",
+          "params": [
+            "kp",
+            "{{kid}}",
+            "Diary",
+            "private",
+            "2026-01-01T00:00:00Z",
+            "2026-01-01T00:00:00Z"
+          ],
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "db",
+          "as": "kid",
+          "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, '', '', 'low', ?, ?, ?)",
+          "params": [
+            "ke",
+            "{{kid}}",
+            "Kite",
+            "everyone",
+            "2026-01-01T00:00:00Z",
+            "2026-01-01T00:00:00Z"
+          ],
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "db",
+          "as": "mom",
+          "sql": "UPDATE app_wishlist__wish_items SET visibility = 'everyone' WHERE member_id = ?",
+          "params": [
+            "{{kid}}"
+          ],
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "db",
+          "as": "mom",
+          "sql": "SELECT id FROM app_wishlist__wish_items WHERE member_id = ?",
+          "params": [
+            "{{kid}}"
+          ],
+          "expect": {
+            "status": 200,
+            "rowCount": 1,
+            "rowsContain": [
+              {
+                "id": "ke"
+              }
+            ]
+          }
+        },
+        {
+          "action": "db",
+          "as": "mom",
+          "sql": "UPDATE app_wishlist__wish_items SET name = 'Red kite' WHERE id = 'ke'",
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "db",
+          "as": "mom",
+          "sql": "DELETE FROM app_wishlist__wish_items WHERE member_id = ? AND id = 'kp'",
+          "params": [
+            "{{kid}}"
+          ],
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "db",
+          "as": "kid",
+          "sql": "SELECT id, name, visibility FROM app_wishlist__wish_items WHERE member_id = ? ORDER BY id",
+          "params": [
+            "{{kid}}"
+          ],
+          "expect": {
+            "status": 200,
+            "rowCount": 2,
+            "rowsContain": [
+              {
+                "id": "ke",
+                "name": "Red kite"
+              },
+              {
+                "id": "kp",
+                "visibility": "private"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "in a shared space the steward can neither reveal, read nor delete a child's only-me item, and a participant adult cannot touch the child's list at all",
+      "context": "shared_space",
+      "members": {
+        "steward": "admin",
+        "adult": "adult",
+        "kid": "child"
+      },
+      "steps": [
+        {
+          "action": "db",
+          "as": "kid",
+          "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, '', '', 'low', ?, ?, ?)",
+          "params": [
+            "kp",
+            "{{kid}}",
+            "Diary",
+            "private",
+            "2026-01-01T00:00:00Z",
+            "2026-01-01T00:00:00Z"
+          ],
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "db",
+          "as": "kid",
+          "sql": "INSERT INTO app_wishlist__wish_items (id, member_id, name, description, url, priority, visibility, created_at, updated_at) VALUES (?, ?, ?, '', '', 'low', ?, ?, ?)",
+          "params": [
+            "ke",
+            "{{kid}}",
+            "Kite",
+            "everyone",
+            "2026-01-01T00:00:00Z",
+            "2026-01-01T00:00:00Z"
+          ],
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "db",
+          "as": "steward",
+          "sql": "UPDATE app_wishlist__wish_items SET visibility = 'everyone' WHERE member_id = ?",
+          "params": [
+            "{{kid}}"
+          ],
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "db",
+          "as": "steward",
+          "sql": "SELECT id FROM app_wishlist__wish_items WHERE member_id = ?",
+          "params": [
+            "{{kid}}"
+          ],
+          "expect": {
+            "status": 200,
+            "rowCount": 1,
+            "rowsContain": [
+              {
+                "id": "ke"
+              }
+            ]
+          }
+        },
+        {
+          "action": "db",
+          "as": "steward",
+          "sql": "UPDATE app_wishlist__wish_items SET name = 'Red kite' WHERE id = 'ke'",
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "db",
+          "as": "steward",
+          "sql": "DELETE FROM app_wishlist__wish_items WHERE member_id = ? AND id = 'kp'",
+          "params": [
+            "{{kid}}"
+          ],
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "db",
+          "as": "kid",
+          "sql": "SELECT id, name, visibility FROM app_wishlist__wish_items WHERE member_id = ? ORDER BY id",
+          "params": [
+            "{{kid}}"
+          ],
+          "expect": {
+            "status": 200,
+            "rowCount": 2,
+            "rowsContain": [
+              {
+                "id": "ke",
+                "name": "Red kite"
+              },
+              {
+                "id": "kp",
+                "visibility": "private"
+              }
+            ]
+          }
+        },
+        {
+          "action": "db",
+          "as": "adult",
+          "sql": "UPDATE app_wishlist__wish_items SET name = 'Planted' WHERE member_id = ?",
+          "params": [
+            "{{kid}}"
+          ],
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "db",
+          "as": "adult",
+          "sql": "DELETE FROM app_wishlist__wish_items WHERE member_id = ?",
+          "params": [
+            "{{kid}}"
+          ],
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "action": "db",
+          "as": "kid",
+          "sql": "SELECT id, name FROM app_wishlist__wish_items WHERE member_id = ? ORDER BY id",
+          "params": [
+            "{{kid}}"
+          ],
+          "expect": {
+            "status": 200,
+            "rowCount": 2,
+            "rowsContain": [
+              {
+                "id": "ke",
+                "name": "Red kite"
+              },
+              {
+                "id": "kp",
+                "name": "Diary"
               }
             ]
           }

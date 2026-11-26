@@ -6,7 +6,7 @@
   ],
   "name": "Wish List",
   "version": "1.0.1",
-  "description": "Personal gift wishlists for every family member. Add items with priorities and links; family can browse each other's lists.",
+  "description": "Personal gift wishlists for every family member. Add items with priorities and links, browse each other's lists, and mark what you'll get without the list's owner seeing.",
   "entrypoint": "index.html",
   "runtime": "static",
   "icon": "\ud83c\udf81",
@@ -24,7 +24,9 @@
     },
     "my_items": {
       "sql": "SELECT id, member_id, name, description, url, priority, visibility, created_at FROM app_wishlist__wish_items WHERE member_id = ? ORDER BY created_at DESC",
-      "params": [":me"]
+      "params": [
+        ":me"
+      ]
     }
   },
   "automation_actions": {
@@ -72,11 +74,21 @@
   "member_references": {
     "wish_items": {
       "column": "member_id",
-      "on_removed": "delete"
+      "on_removed": "delete",
+      "dependent_tables": [
+        {
+          "table": "claims",
+          "foreign_key": "item_id"
+        }
+      ]
     },
     "lists": {
       "column": "member_id",
       "id_column": "member_id",
+      "on_removed": "delete"
+    },
+    "claims": {
+      "column": "member_id",
       "on_removed": "delete"
     }
   },
@@ -92,15 +104,60 @@
         "adults",
         "everyone"
       ],
-      "write_owner_only": true
+      "supervisor_assigns_owner": true,
+      "column_write_acls": {
+        "member_id": {
+          "writable_by": [],
+          "actions": [
+            "update"
+          ]
+        },
+        "id": {
+          "writable_by": [],
+          "actions": [
+            "update"
+          ]
+        }
+      },
+      "supervisor_children_only": true
+    },
+    "claims": {
+      "kind": "inherit_visibility",
+      "fk_column": "item_id",
+      "parent_table": "wish_items",
+      "writer_column": "member_id",
+      "hidden_from_parent_owner": true,
+      "column_write_acls": {
+        "member_id": {
+          "writable_by": [],
+          "actions": [
+            "update"
+          ]
+        },
+        "item_id": {
+          "writable_by": [],
+          "actions": [
+            "update"
+          ]
+        }
+      }
     },
     "lists": {
       "kind": "adult_writable"
     }
   },
+  "delete_cascades": {
+    "wish_items": [
+      {
+        "table": "claims",
+        "foreign_key": "item_id"
+      }
+    ]
+  },
   "db_plaintext_columns": [
-    "visibility",
-    "priority"
+    "priority",
+    "status",
+    "visibility"
   ],
   "data_access": {
     "reads": [
